@@ -26,6 +26,10 @@ func main() {
 		log.Fatalf("db: %v", err)
 	}
 
+	if err := db.RunMigrations(gormDB, "migrations"); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}

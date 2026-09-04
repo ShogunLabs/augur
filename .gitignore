@@ -1,0 +1,39 @@
+
+# Go
+
+*.exe
+
+*.exe~
+
+*.dll
+
+*.so
+
+*.dylib
+
+*.test
+
+*.out
+
+bin/
+
+vendor/
+
+
+
+# Env
+
+.env
+
+.env.local
+
+
+
+# IDE
+
+.vscode/
+
+.idea/
+
+*.swp
+
