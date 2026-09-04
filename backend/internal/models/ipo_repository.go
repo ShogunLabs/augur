@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
+	"github.com/drunktrader/ipo-checker/internal/upstox"
+	"time"
 )
 
 type IPORepository struct {
@@ -177,3 +179,132 @@ func (r *IPORepository) GetGMPHistory(ipoID uint, limit int) ([]IPOGMPHistory, e
 	return rows, nil
 
 }
+
+
+
+func (r *IPORepository) UpsertFromUpstoxDetails(d *upstox.IPODetails) (bool, error) {
+
+	var existing IPO
+
+	err := r.db.Where("external_id = ?", d.ID).First(&existing).Error
+
+	now := time.Now()
+
+	created := false
+
+
+
+	row := IPO{
+
+		ExternalID:             d.ID,
+
+		Symbol:                 d.Symbol,
+
+		Name:                   d.Name,
+
+		ISIN:                   d.ISIN,
+
+		IssueType:              d.IssueType,
+
+		Industry:               d.Industry,
+
+		IssueSize:              d.IssueSize,
+
+		PriceMin:               d.MinimumPrice,
+
+		PriceMax:               d.MaximumPrice,
+
+		FaceValue:              upstox.F64(d.FaceValue),
+
+		TickSize:               upstox.F64(d.TickSize),
+
+		LotSize:                upstox.I(d.LotSize),
+
+		MinimumQuantity:        upstox.I(d.MinimumQuantity),
+
+		CutoffPrice:            upstox.F64(d.CutOffPrice),
+
+		ListingPrice:           d.ListingPrice,
+
+		ListingExchange:        upstox.S(d.ListingExchange),
+
+		Status:                 d.Status,
+
+		BiddingStart:           upstox.ParseDate(d.BiddingStartDate),
+
+		BiddingEnd:             upstox.ParseDate(d.BiddingEndDate),
+
+		PreApplyStart:          upstox.ParseDate(upstox.S(d.Timeline.PreApplyStartDate)),
+
+		AllotmentStart:         upstox.ParseDate(upstox.S(d.Timeline.AllotmentStartDate)),
+
+		AllotmentDate:          upstox.ParseDate(upstox.S(d.Timeline.AllotmentDate)),
+
+		RefundInitiation:       upstox.ParseDate(upstox.S(d.Timeline.RefundInitiationDate)),
+
+		ListingDate:            upstox.ParseDate(upstox.S(d.Timeline.ListingDate)),
+
+		MandateEnd:             upstox.ParseDate(upstox.S(d.Timeline.MandateEndDate)),
+
+		DailyStartTime:         d.DailyStartTime,
+
+		DailyEndTime:           d.DailyEndTime,
+
+		Registrar:              upstox.S(d.RegistrarInfo.Registrar),
+
+		RegistrarName:          upstox.S(d.RegistrarInfo.Name),
+
+		RegistrarEmail:         upstox.S(d.RegistrarInfo.Email),
+
+		RegistrarContactName:   upstox.S(d.RegistrarInfo.ContactName),
+
+		RegistrarContactNumber: upstox.S(d.RegistrarInfo.ContactNumber),
+
+		RegistrarWebsite:       upstox.S(d.RegistrarInfo.Website),
+
+		RHPUrl:                 upstox.S(d.RHPUrl),
+
+		DRHPUrl:                upstox.S(d.DRHPUrl),
+
+		Subscription:           upstox.S(d.TotalSubscription),
+
+		UpdatedAt:              now,
+
+	}
+
+
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+
+		row.CreatedAt = now
+
+		if err := r.db.Create(&row).Error; err != nil {
+
+			return false, err
+
+		}
+
+		created = true
+
+	} else if err != nil {
+
+		return false, err
+
+	} else {
+
+		row.ID = existing.ID
+
+		row.CreatedAt = existing.CreatedAt
+
+		if err := r.db.Save(&row).Error; err != nil {
+
+			return false, err
+
+		}
+
+	}
+
+	return created, nil
+
+}
+
