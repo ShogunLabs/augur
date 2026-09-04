@@ -12,6 +12,7 @@ import (
 	"github.com/drunktrader/ipo-checker/internal/api"
 	"github.com/drunktrader/ipo-checker/internal/config"
 	"github.com/drunktrader/ipo-checker/internal/db"
+	"github.com/drunktrader/ipo-checker/internal/models"
 	"github.com/gin-gonic/gin"
 )
 
@@ -62,6 +63,11 @@ func main() {
 			"version":     "0.1.0",
 		})
 	})
+
+	// Versioned public API
+	ipoRepo := models.NewIPORepository(gormDB)
+	v1 := router.Group("/api/v1")
+	api.NewIPOHandler(ipoRepo).Register(v1)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
