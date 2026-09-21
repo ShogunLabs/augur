@@ -64,11 +64,13 @@ func DefaultSyncOptions() SyncOptions {
 
 // Engine is the sync engine; it owns no goroutines of its own.
 type Engine struct {
-	cfg     *config.Config
-	repo    *models.IPORepository
-	client  *upstox.Client
-	clock   Clock
-	options SyncOptions
+	cfg       *config.Config
+	repo      *models.IPORepository
+	client    *upstox.Client
+	clock     Clock
+	options   SyncOptions
+	mu        sync.Mutex // Protects detailCalls counter
+	detailCalls int
 }
 
 // NewEngine wires the engine with all collaborators.
@@ -80,6 +82,18 @@ func NewEngine(cfg *config.Config, repo *models.IPORepository, client *upstox.Cl
 		clock:   realClock{},
 		options: opts,
 	}
+}
+
+// shouldFetchDetail checks and increments the detail call counter atomically.
+// Returns true if we should proceed with fetching detail, false if limit reached.
+func (e *Engine) shouldFetchDetail() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.detailCalls >= e.options.MaxDetailCalls {
+		return false
+	}
+	e.detailCalls++
+	return true
 }
 
 // IsMarketHours reports whether the given time (in IST) is between 08:00 and
@@ -110,9 +124,6 @@ func (e *Engine) Run(ctx context.Context) (SyncResult, error) {
 		return res, errors.New("sync: repository is nil")
 	}
 
-	var mu sync.Mutex
-	detailCalls := 0
-
 	for _, status := range Statuses {
 		for _, issueType := range IssueTypes {
 			page := 1
@@ -124,9 +135,9 @@ func (e *Engine) Run(ctx context.Context) (SyncResult, error) {
 				list, err := e.client.GetIPOs(status, issueType, page, e.options.PageSize)
 				if err != nil {
 					log.Printf("[sync] list error status=%s issueType=%s page=%d: %v", status, issueType, page, err)
-					mu.Lock()
+					e.mu.Lock()
 					res.Errors++
-					mu.Unlock()
+					e.mu.Unlock()
 					break
 				}
 				if list == nil || len(list.Data) == 0 {
@@ -138,24 +149,21 @@ func (e *Engine) Run(ctx context.Context) (SyncResult, error) {
 						return res, ctx.Err()
 					}
 
-					mu.Lock()
-					if detailCalls >= e.options.MaxDetailCalls {
-						mu.Unlock()
+					// Use atomic check-and-increment for detail calls
+					if !e.shouldFetchDetail() {
 						log.Printf("[sync] hit MaxDetailCalls=%d, ending run early", e.options.MaxDetailCalls)
 						return res, nil
 					}
-					detailCalls++
-					mu.Unlock()
 
 					created, updated, skipped, err := e.syncOne(ctx, item, status, issueType)
-					mu.Lock()
+					e.mu.Lock()
 					res.Created += boolToInt(created)
 					res.Updated += boolToInt(updated)
 					res.Skipped += boolToInt(skipped)
 					if err != nil {
 						res.Errors++
 					}
-					mu.Unlock()
+					e.mu.Unlock()
 
 					if e.options.DetailSleep > 0 {
 						select {

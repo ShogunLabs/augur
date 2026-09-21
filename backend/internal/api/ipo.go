@@ -50,73 +50,54 @@ func (h *IPOHandler) Register(rg *gin.RouterGroup) {
 
 
 func (h *IPOHandler) List(c *gin.Context) {
-
 	opts := models.ListOptions{
-
 		Status:    c.Query("status"),
-
 		Registrar: c.Query("registrar"),
-
 		Search:    c.Query("q"),
-
 	}
 
 	if v := c.Query("page"); v != "" {
-
-		opts.Page, _ = strconv.Atoi(v)
-
+		if page, err := strconv.Atoi(v); err == nil {
+			opts.Page = page
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+			return
+		}
 	}
 
 	if v := c.Query("page_size"); v != "" {
-
-		opts.PageSize, _ = strconv.Atoi(v)
-
+		if pageSize, err := strconv.Atoi(v); err == nil {
+			opts.PageSize = pageSize
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
+			return
+		}
 	}
 
-
-
 	ipos, total, err := h.repo.List(opts)
-
 	if err != nil {
-
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error", "detail": err.Error()})
-
 		return
-
 	}
 
 	page := opts.Page
-
 	if page < 1 {
-
 		page = 1
-
 	}
 
 	pageSize := opts.PageSize
-
 	if pageSize < 1 {
-
 		pageSize = 20
-
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-
 		"data": ipos,
-
 		"meta": gin.H{
-
 			"page":      page,
-
 			"page_size": pageSize,
-
 			"total":     total,
-
 		},
-
 	})
-
 }
 
 
