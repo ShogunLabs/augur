@@ -34,7 +34,6 @@ venv/
 .venv/
 .env
 .env.local
-.env.*
 
 # Logs and temporary files
 *.log
