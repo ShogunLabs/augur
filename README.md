@@ -1,16 +1,18 @@
 # Augur Backend
 
-Augur is an IPO data and allotment-checking backend focused on collecting IPO information, normalizing it, storing it in PostgreSQL, and exposing it through an API.
+Augur is an IPO data backend focused on collecting IPO information from Upstox, normalizing and storing it in PostgreSQL, and exposing a stable API for the future Augur website and Android application.
 
-The project is currently in the **data-ingestion and database foundation phase**. The next major phase is the API layer, followed by the registrar/allotment subsystem.
+The current release is focused on the **IPO data foundation and API v1**. Allotment checking, DRHP/RHP document processing, RAG-based IPO insights, authentication, and other user-facing features are intentionally deferred to later versions.
 
 ---
 
 ## Current Status
 
+### Data and database
+
 - [x] Upstox IPO list ingestion through `/v2/ipos`
 - [x] Support for both `regular` and `sme` IPOs
-- [x] Status-based staging:
+- [x] Status-based JSON staging:
   - `open.json`
   - `closed.json`
   - `upcoming.json`
@@ -20,23 +22,52 @@ The project is currently in the **data-ingestion and database foundation phase**
 - [x] SQLAlchemy ORM
 - [x] Alembic migrations
 - [x] UPSERT-based IPO persistence
+- [x] Raw Upstox payload preservation through JSONB
 - [x] Day-end JSON/CSV/XLSX export
-- [x] Dockerized PostgreSQL + Python environment
-- [x] Sequential `sync.py` pipeline
-- [ ] FastAPI API layer
-- [ ] API pagination/filtering/sorting
-- [ ] Automated scheduled sync
-- [ ] Registrar abstraction
+- [x] Database query indexes
+
+### API v1
+
+- [x] FastAPI application
+- [x] `GET /health`
+- [x] `GET /ready`
+- [x] `GET /api/v1/home`
+- [x] `GET /api/v1/ipos`
+- [x] `GET /api/v1/ipos/{ipo_id}`
+- [x] Status filtering
+- [x] Regular/SME filtering
+- [x] Pagination
+- [x] Sorting
+- [x] Missing/optional field handling
+- [x] CORS configuration
+- [x] Common error response format
+- [x] API and PostgreSQL integration tests
+
+### Reproducibility
+
+- [x] Dockerfile
+- [x] Docker Compose
+- [x] Separate native and Docker database configuration
+- [x] Environment variable configuration
+- [x] End-to-end Docker sync
+
+### Deferred
+
 - [ ] Allotment checker
-- [ ] API authentication/rate limiting
-- [ ] Automated tests and CI
-- [ ] Production deployment
+- [ ] Registrar abstraction/adapters
+- [ ] DRHP/RHP document ingestion
+- [ ] RAG / IPO intelligence
+- [ ] User authentication
+- [ ] Watchlists and notifications
+- [ ] Android app
+- [ ] Production deployment / CI/CD
+- [ ] Additional lifecycle states such as `allotted`
 
 ---
 
 # Architecture
 
-The current system intentionally separates **discovery**, **hydration**, and **storage**.
+The system separates **discovery**, **hydration**, **storage**, and **API serving**.
 
 ```mermaid
 flowchart TD
@@ -57,6 +88,13 @@ flowchart TD
     DB[(PostgreSQL)]
     A[Alembic]
     M[SQLAlchemy Models]
+
+    API[FastAPI]
+    HOME["GET /api/v1/home"]
+    IPOS["GET /api/v1/ipos"]
+    DETAIL["GET /api/v1/ipos/{id}"]
+
+    T[API Tests]
 
     BW[batch_worker.py]
     DJSON[Daily JSON]
@@ -82,6 +120,13 @@ flowchart TD
     M --> A
     A --> DB
 
+    DB --> API
+    API --> HOME
+    API --> IPOS
+    API --> DETAIL
+
+    T --> API
+
     J1 --> BW
     J2 --> BW
     J3 --> BW
@@ -92,19 +137,21 @@ flowchart TD
     BW --> DXLSX
 ```
 
-### Why the pipeline is split this way
+## Why the pipeline is split this way
 
-- `/ipos` is the **discovery endpoint**.
-  - It tells us which IPOs exist for each lifecycle status and issue type.
-  - It is used to build the four local staging files.
-- `/ipos/:id` is the **hydration endpoint**.
-  - It provides the detailed IPO record.
-  - The returned record is normalized and persisted in PostgreSQL.
+- `/v2/ipos` is the **discovery endpoint**.
+  - It identifies IPOs by lifecycle status and issue type.
+  - The result is written to four JSON staging files.
+- `/v2/ipos/:id` is the **hydration endpoint**.
+  - It provides detailed IPO information.
+  - The response is normalized and persisted in PostgreSQL.
 - PostgreSQL is the **application source of truth**.
-  - The JSON files are staging/snapshot artifacts, not the permanent database.
-- The day-end batch worker produces human-friendly exports without changing the database.
+  - The JSON files are staging/snapshot artifacts, not the permanent data store.
+- FastAPI exposes only the public contract required by Augur.
+  - Clients do not access PostgreSQL or Upstox directly.
+- The day-end batch worker produces JSON, CSV, and XLSX exports from the staging files without modifying PostgreSQL.
 
-This separation gives the project a clean debugging path: discovery, hydration, normalization, and persistence can each be checked independently.
+This separation gives the project a clear debugging path: discovery, hydration, normalization, persistence, and API serving can each be checked independently.
 
 ---
 
@@ -113,8 +160,37 @@ This separation gives the project a clean debugging path: discovery, hydration, 
 ```text
 backend/
 ├── app/
+│   ├── __init__.py
 │   ├── database.py
-│   └── models.py
+│   ├── exceptions.py
+│   ├── models.py
+│   ├── main.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── dependencies.py
+│   │   ├── exception_handlers.py
+│   │   └── routes/
+│   │       ├── __init__.py
+│   │       ├── health.py
+│   │       ├── home.py
+│   │       └── ipos.py
+│   ├── repositories/
+│   │   ├── home.py
+│   │   └── ipo.py
+│   ├── schemas/
+│   │   ├── errors.py
+│   │   ├── home.py
+│   │   └── ipo.py
+│   └── services/
+│       ├── home.py
+│       └── ipo.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_health.py
+│   ├── test_home.py
+│   └── test_ipos.py
 │
 ├── ipos/
 │   ├── open.json
@@ -145,19 +221,41 @@ backend/
 ├── get_ipos.py
 ├── hydrate_ipos.py
 ├── requirements.txt
+├── requirements-dev.txt
+├── pytest.ini
 ├── setup.sh
 └── sync.py
 ```
 
-### Important files
+## Important files
 
 - `app/database.py`
   - SQLAlchemy engine and session configuration.
-  - Reads database configuration from environment variables.
+  - Reads PostgreSQL configuration from environment variables.
 - `app/models.py`
-  - Defines the PostgreSQL schema through SQLAlchemy.
+  - Defines the PostgreSQL schema.
+  - Defines database constraints and query indexes.
+- `app/main.py`
+  - Creates the FastAPI application.
+  - Registers CORS, exception handlers, and routers.
+- `app/api/routes/health.py`
+  - Provides `/health` and `/ready`.
+- `app/api/routes/home.py`
+  - Provides the homepage preview endpoint.
+- `app/api/routes/ipos.py`
+  - Provides the public IPO list and detail endpoints.
+- `app/services/`
+  - Contains application/business logic and API serialization.
+- `app/repositories/`
+  - Contains database query logic.
+- `app/schemas/`
+  - Defines public API response contracts.
+- `app/exceptions.py`
+  - Defines application-level errors.
+- `app/api/exception_handlers.py`
+  - Converts application, validation, database, and unexpected errors into the common API error format.
 - `get_ipos.py`
-  - Calls Upstox `/ipos`.
+  - Calls Upstox `/v2/ipos`.
   - Handles status + issue-type combinations.
   - Handles pagination.
   - Writes the four JSON staging files.
@@ -165,22 +263,19 @@ backend/
   - Reads the four JSON files.
   - Collects unique IPO IDs.
   - Calls `/ipos/:id`.
-  - Normalizes the complete response.
+  - Normalizes the detailed response.
   - UPSERTs into PostgreSQL.
 - `sync.py`
-  - Executes `get_ipos.py` first.
-  - Executes `hydrate_ipos.py` only after discovery succeeds.
+  - Runs discovery first.
+  - Runs hydration only after discovery succeeds.
 - `batch_worker.py`
-  - Reads the four JSON files.
   - Produces day-end JSON, CSV, and Excel exports.
-  - Excel contains separate sheets for `All IPOs`, `Open`, `Upcoming`, `Closed`, and `Listed`.
 - `migrations/`
   - Contains version-controlled Alembic migrations.
-  - Required for reproducing the schema on another machine.
 - `Dockerfile`
   - Builds the Python application image.
 - `docker-compose.yml`
-  - Runs the Python backend and PostgreSQL together.
+  - Runs the backend and PostgreSQL together.
 - `setup.sh`
   - Intended to bootstrap the environment on a fresh machine.
 
@@ -188,7 +283,7 @@ backend/
 
 # Database Design
 
-The current PostgreSQL design intentionally keeps the model simple.
+The current PostgreSQL design intentionally keeps the IPO model simple.
 
 There is one primary `ipos` table for both regular and SME IPOs.
 
@@ -247,14 +342,18 @@ issue_type = regular
 issue_type = sme
 ```
 
-Lifecycle status is represented by:
+## Lifecycle status
+
+The current API/database lifecycle states are:
 
 ```text
-status = upcoming
-status = open
-status = closed
-status = listed
+upcoming
+open
+closed
+listed
 ```
+
+No additional `allotted` state is included in the current version.
 
 Examples:
 
@@ -262,11 +361,15 @@ Examples:
 SELECT *
 FROM ipos
 WHERE status = 'open';
+```
 
+```sql
 SELECT *
 FROM ipos
 WHERE issue_type = 'sme';
+```
 
+```sql
 SELECT *
 FROM ipos
 WHERE status = 'open'
@@ -290,6 +393,198 @@ The same principle applies to `registrar_info` and `raw_data`.
 
 ---
 
+# Database Indexes
+
+Indexes are defined in `app/models.py` and materialized through Alembic migrations.
+
+Current query indexes are designed around the API's real filters and sorting patterns:
+
+```text
+(status, issue_type)
+(status, first_seen_at)
+(status, bidding_start_date)
+(status, bidding_end_date)
+(status, listing_date)
+issue_type
+```
+
+These support queries such as:
+
+```text
+/api/v1/ipos?status=open&issue_type=sme
+/api/v1/ipos?status=upcoming&sort=bidding_start_date
+/api/v1/ipos?status=open&sort=bidding_end_date
+/api/v1/ipos?status=listed&sort=listing_date
+```
+
+Indexes are an internal PostgreSQL optimization. They do not change the logical IPO records stored in the table.
+
+---
+
+# API v1
+
+The public API is served by FastAPI.
+
+## Endpoints
+
+```text
+GET /health
+GET /ready
+
+GET /api/v1/home
+
+GET /api/v1/ipos
+GET /api/v1/ipos/{ipo_id}
+```
+
+## Health
+
+`GET /health`
+
+Basic process-level health check.
+
+Example:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+## Readiness
+
+`GET /ready`
+
+Checks whether required dependencies, including PostgreSQL, are reachable.
+
+Example:
+
+```json
+{
+  "status": "ready",
+  "database": "ok"
+}
+```
+
+## Homepage
+
+`GET /api/v1/home`
+
+Returns a small preview for the public homepage, grouped into the four current lifecycle states:
+
+```json
+{
+  "upcoming": [],
+  "open": [],
+  "closed": [],
+  "listed": []
+}
+```
+
+The homepage is intentionally a preview endpoint. The frontend can show a `Show All` action for each section and use the paginated `/api/v1/ipos` endpoint for the full list.
+
+## IPO list
+
+`GET /api/v1/ipos`
+
+Supported query parameters:
+
+```text
+status=upcoming|open|closed|listed
+issue_type=regular|sme
+sort=newest|listing_date|bidding_start_date|bidding_end_date
+page=1
+limit=20
+```
+
+Examples:
+
+```text
+/api/v1/ipos?status=open
+/api/v1/ipos?issue_type=sme
+/api/v1/ipos?status=open&issue_type=sme
+/api/v1/ipos?page=1&limit=20
+/api/v1/ipos?status=listed&sort=listing_date
+```
+
+The response is paginated:
+
+```json
+{
+  "data": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 0,
+    "pages": 0
+  }
+}
+```
+
+## IPO detail
+
+`GET /api/v1/ipos/{ipo_id}`
+
+Returns the stored detailed IPO record, including fields such as:
+
+- pricing
+- bidding dates/times
+- lot size
+- listing information
+- document URLs
+- timeline
+- registrar information
+
+Fields whose values are unavailable are omitted from the response rather than returned as JSON `null`.
+
+This keeps the API contract clean while allowing the frontend to display its own missing-value representation such as `-`.
+
+---
+
+# API Error Contract
+
+Expected API errors use one consistent structure:
+
+```json
+{
+  "error": {
+    "code": "IPO_NOT_FOUND",
+    "message": "IPO not found",
+    "details": null
+  }
+}
+```
+
+Current error categories include:
+
+| HTTP status | Error code | Meaning |
+|---|---|---|
+| `404` | `IPO_NOT_FOUND` | Requested IPO does not exist |
+| `422` | `VALIDATION_ERROR` | Request validation failed |
+| `503` | `DATABASE_NOT_READY` | Readiness dependency is unavailable |
+| `503` | `DATABASE_UNAVAILABLE` | Database could not serve the request |
+| `500` | `INTERNAL_SERVER_ERROR` | Unexpected server error |
+
+Validation details are returned under `error.details`.
+
+---
+
+# CORS
+
+CORS origins are configured through the environment.
+
+Development values:
+
+```env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+This allows a future Next.js/Vite website to call the API from the browser.
+
+Production origins should be changed to the actual frontend domains rather than using a wildcard.
+
+---
+
 # Environment Variables
 
 ## Native development
@@ -297,6 +592,8 @@ The same principle applies to `registrar_info` and `raw_data`.
 Native development uses `.env`.
 
 ```env
+APP_ENV=development
+
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=augur_project
@@ -304,6 +601,8 @@ DB_USER=ipo_user
 DB_PASSWORD=your_password
 
 UPSTOX_ACCESS_TOKEN=your_upstox_access_token
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 ## Docker development
@@ -311,6 +610,8 @@ UPSTOX_ACCESS_TOKEN=your_upstox_access_token
 Docker uses `.env.docker`.
 
 ```env
+APP_ENV=development
+
 DB_HOST=postgres
 DB_PORT=5432
 DB_NAME=augur_project
@@ -318,6 +619,8 @@ DB_USER=ipo_user
 DB_PASSWORD=your_password
 
 UPSTOX_ACCESS_TOKEN=your_upstox_access_token
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 The important difference is:
@@ -332,7 +635,7 @@ DB_HOST=postgres
 
 `postgres` is the PostgreSQL service name in `docker-compose.yml`.
 
-### Security
+## Security
 
 Never commit:
 
@@ -347,13 +650,13 @@ Commit:
 .env.example
 ```
 
-with empty placeholders.
+with safe placeholders only.
 
 ---
 
 # Native Setup
 
-Use this when Python and PostgreSQL are already installed directly on the machine.
+Use this when Python and PostgreSQL are installed directly on the machine.
 
 ## Prerequisites
 
@@ -362,7 +665,7 @@ Use this when Python and PostgreSQL are already installed directly on the machin
 - Git
 - A valid Upstox access token
 
-## 1. Clone the repository
+## 1. Clone
 
 ```bash
 git clone <repository-url>
@@ -382,6 +685,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+For API tests:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ## 4. Configure environment
 
 ```bash
@@ -399,7 +708,7 @@ CREATE USER ipo_user WITH PASSWORD 'your_password';
 CREATE DATABASE augur_project OWNER ipo_user;
 ```
 
-## 6. Apply schema migrations
+## 6. Apply migrations
 
 ```bash
 alembic upgrade head
@@ -423,7 +732,27 @@ hydrate_ipos.py
 PostgreSQL
 ```
 
-## 8. Generate day-end exports
+## 8. Start the API
+
+From `backend/`:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## 9. Run tests
+
+```bash
+RUN_INTEGRATION_TESTS=1 pytest -q
+```
+
+## 10. Generate day-end exports
 
 ```bash
 python batch_worker.py
@@ -460,7 +789,7 @@ Docker is the preferred reproducible environment for team development.
 
 PostgreSQL does not need to be installed on the host for the Docker workflow.
 
-## 2. Clone the repository
+## 2. Clone
 
 ```bash
 git clone <repository-url>
@@ -476,12 +805,17 @@ cp .env.example .env.docker
 Edit `.env.docker`:
 
 ```env
+APP_ENV=development
+
 DB_HOST=postgres
 DB_PORT=5432
 DB_NAME=augur_project
 DB_USER=ipo_user
 DB_PASSWORD=your_password
+
 UPSTOX_ACCESS_TOKEN=your_upstox_access_token
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 ## 4. Build and start containers
@@ -510,7 +844,15 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend python sync.py
 ```
 
-## 7. Generate day-end exports
+## 7. Start API
+
+The Compose configuration exposes:
+
+```text
+http://127.0.0.1:8000
+```
+
+## 8. Generate exports
 
 ```bash
 docker compose exec backend python batch_worker.py
@@ -524,10 +866,12 @@ flowchart LR
     P[Postgres container]
     V[(postgres_data volume)]
     U[Upstox API]
+    W[Browser / API Client]
 
     B -->|postgres:5432| P
     P --> V
     B -->|HTTPS| U
+    W -->|HTTP| B
 ```
 
 The native PostgreSQL instance and Docker PostgreSQL are separate databases.
@@ -573,7 +917,7 @@ GET /v2/ipos/{id}
 
 The full response is normalized and inserted with PostgreSQL UPSERT semantics.
 
-Repeated hydration does not create duplicates.
+Repeated hydration does not create duplicate IPO rows.
 
 ## Persistence
 
@@ -585,6 +929,20 @@ PostgreSQL contains:
 - JSONB for the complete `raw_data`
 
 This keeps the database queryable while preserving the upstream payload.
+
+## API
+
+The API reads from PostgreSQL.
+
+```text
+Web / Android
+      ↓
+FastAPI
+      ↓
+PostgreSQL
+```
+
+Clients do not call Upstox directly.
 
 ## Day-end export
 
@@ -635,148 +993,150 @@ They are staging/snapshot artifacts. PostgreSQL remains the application source o
 - Keep the public API contract separate from the SQLAlchemy model.
 - Keep repeated synchronization idempotent.
 - Preserve raw upstream data where practical.
+- Keep API responses stable and frontend-independent.
+- Use indexes only for real filtering/sorting patterns.
 - Do not add Redis, Kafka, Celery, or other infrastructure until a real workload justifies it.
-- Treat external APIs and registrars as unreliable dependencies: use timeouts, retries, validation, and controlled concurrency where appropriate.
+- Treat external APIs as unreliable dependencies: use timeouts, retries, validation, and controlled concurrency where appropriate.
+- Keep future allotment and document/RAG functionality isolated from the current v1 data/API layer.
 
 ---
 
-# Next Development Phase
+# Testing
 
-The current foundation is complete enough to move into the service layer. The next work should be done deliberately rather than by adding features indiscriminately.
+The project uses `pytest` for API and integration tests.
 
-## 1. FastAPI API Layer — Highest Priority
+Current coverage includes:
 
-Build the public API on top of PostgreSQL.
+- `/health`
+- `/ready`
+- `/api/v1/home`
+- IPO list endpoint
+- IPO detail endpoint
+- filtering
+- pagination
+- sorting
+- invalid parameters
+- unknown IPO / `404`
+- optional/missing IPO fields
+- common error responses
+- PostgreSQL integration checks
 
-Initial endpoints:
+Run the standard test suite:
 
-```text
-GET /health
-GET /api/v1/ipos
-GET /api/v1/ipos/{ipo_id}
+```bash
+pytest -q
 ```
 
-Then add:
+Run with database integration checks:
 
-```text
-status
-issue_type
-pagination
-sorting
+```bash
+RUN_INTEGRATION_TESTS=1 pytest -q
 ```
-
-Examples:
-
-```text
-/api/v1/ipos?status=open
-/api/v1/ipos?issue_type=sme
-/api/v1/ipos?status=open&issue_type=sme
-/api/v1/ipos?page=1&limit=20
-```
-
-### What deserves attention here
-
-The API should not become a thin copy of Upstox.
-
-The public contract should be stable and designed around what Augur needs. Upstox should remain an implementation detail of the ingestion pipeline.
 
 ---
 
-## 2. Repository / Service Separation
+# Current v1 Roadmap
 
-Before adding many endpoints, introduce:
+```text
+Phase 1 — Data Foundation                         DONE
+├── Upstox /ipos ingestion
+├── JSON staging
+├── /ipos/:id hydration
+├── PostgreSQL
+├── SQLAlchemy
+└── Alembic
+
+Phase 2 — Reproducible Environment                DONE
+├── Dockerfile
+├── Docker Compose
+├── Environment separation
+└── End-to-end Docker sync
+
+Phase 3 — API v1                                 DONE
+├── FastAPI
+├── /health
+├── /ready
+├── /api/v1/home
+├── /api/v1/ipos
+├── /api/v1/ipos/{id}
+├── Filtering
+├── Sorting
+├── Pagination
+├── Indexes
+├── CORS
+├── Common errors
+└── Automated tests
+
+Phase 4 — Web Application                         NEXT
+├── Homepage
+├── Upcoming / Open / Closed / Listed sections
+├── IPO listing pages
+├── IPO detail page
+└── API integration
+
+Phase 5 — Android Application                     PLANNED
+├── Reuse the same API
+├── IPO discovery
+├── IPO details
+└── Native mobile UI
+
+Later Versions
+├── Allotment checker
+├── Registrar abstraction and adapters
+├── Additional lifecycle states such as allotted
+├── DRHP/RHP document ingestion
+├── RAG / IPO intelligence
+├── Authentication
+├── Watchlists
+├── Notifications
+├── CI/CD
+└── Production deployment
+```
+
+---
+
+# Future Website / Mobile Architecture
+
+The intended client architecture is:
 
 ```mermaid
 flowchart TD
-    R[FastAPI Route]
-    S[IPO Service]
-    REPO[IPO Repository]
+    WEB[Augur Website]
+    AND[Android App]
+    API[Augur FastAPI]
     DB[(PostgreSQL)]
+    U[Upstox]
+    SYNC[Sync Worker]
 
-    R --> S
-    S --> REPO
-    REPO --> DB
+    WEB --> API
+    AND --> API
+
+    API --> DB
+    SYNC --> U
+    SYNC --> DB
 ```
 
-Responsibilities:
+For the website:
 
-- Route: HTTP request/response concerns.
-- Service: application/business logic.
-- Repository: database operations.
-- Model: database structure.
-- Schema: public API structure.
+```text
+https://augur.com/
+        ↓
+Web frontend
+        ↓
+https://api.augur.com/api/v1/home
+```
 
-This makes later features much easier to add without turning route handlers into large functions.
+The website root is the frontend, not a redirect to the API. The frontend requests homepage data from the versioned FastAPI API.
 
 ---
 
-## 3. Smart Synchronization
+# Future Features
 
-The current hydration loop is intentionally simple.
+The following are intentionally outside the current v1 scope.
 
-Eventually it should become status-aware:
+## Allotment checker
 
-```text
-open       → refresh frequently
-upcoming   → refresh periodically
-closed     → refresh less frequently
-listed     → refresh rarely
-```
-
-Use synchronization timestamps such as:
-
-```text
-first_seen_at
-last_synced_at
-updated_at
-details_fetched_at
-```
-
-to decide when an IPO actually needs another detail request.
-
-This should be measured before being optimized heavily.
-
----
-
-## 4. Scheduler / Worker Design
-
-Once the API exists, turn sync into scheduled jobs:
-
-```mermaid
-flowchart TD
-    S[Scheduler]
-    I[IPO Sync]
-    E[Day-end Export]
-    DB[(PostgreSQL)]
-    F[Daily Files]
-
-    S --> I
-    S --> E
-    I --> DB
-    E --> F
-```
-
-A reasonable operational sequence is:
-
-```text
-Periodic sync
-    ↓
-PostgreSQL updated
-
-End-of-day sync
-    ↓
-latest staging files
-    ↓
-day-end export
-```
-
----
-
-## 5. Registrar and Allotment System — Major Feature
-
-The current `registrar_info` JSONB is enough to identify the registrar, but the allotment checker should be its own subsystem.
-
-Target architecture:
+Future architecture:
 
 ```mermaid
 flowchart TD
@@ -793,17 +1153,7 @@ flowchart TD
     R --> O[Other Registrar Adapters]
 ```
 
-Every registrar should follow a common interface, conceptually:
-
-```text
-check_application(...)
-        ↓
-AllotmentResult
-```
-
-### This area needs especially careful design
-
-Registrar systems can differ in:
+Registrar-specific concerns will include:
 
 - request format
 - application number rules
@@ -814,190 +1164,38 @@ Registrar systems can differ in:
 - downtime
 - anti-automation behavior
 
-Assume any registrar can fail at any time.
+This subsystem will be isolated from the core IPO API.
 
-The allotment service should isolate those failures rather than allowing one registrar to destabilize the entire API.
+## DRHP/RHP documents and RAG
 
----
-
-## 6. Queueing and Controlled Concurrency
-
-Eventually:
-
-```mermaid
-flowchart LR
-    U[User]
-    API[FastAPI]
-    Q[Job Queue]
-    W[Controlled Worker]
-    R[Registrar]
-
-    U --> API
-    API --> Q
-    Q --> W
-    W --> R
-```
-
-This gives us a place to enforce:
-
-- per-registrar concurrency limits
-- retries
-- timeouts
-- exponential backoff
-- job status
-- duplicate-job prevention
-
-Do not introduce a queue platform until there is a real need. The architecture should allow one later.
-
----
-
-## 7. Automated Testing
-
-Before the allotment subsystem grows, introduce:
+Future pipeline:
 
 ```text
-Unit tests
-Integration tests
-API tests
+IPO
+ ↓
+DRHP / RHP
+ ↓
+PDF ingestion
+ ↓
+Page-aware text extraction
+ ↓
+Chunking
+ ↓
+Embeddings / vector storage
+ ↓
+RAG
+ ↓
+IPO insights
 ```
 
-Pay particular attention to:
-
-- duplicate IPO IDs
-- missing symbols
-- null optional fields
-- missing listing prices
-- malformed dates
-- pagination
-- Upstox authentication failures
-- empty API responses
-- repeated synchronization
-- failed database transactions
-- registrar failures
-
-A sync run should be safe to repeat.
-
----
-
-## 8. Observability
-
-Before production, record:
+Potential future API:
 
 ```text
-sync duration
-IPO count discovered
-IPO count hydrated
-hydration failures
-Upstox errors
-database errors
-registrar errors
-last successful sync
+GET /api/v1/ipos/{ipo_id}/documents
+GET /api/v1/ipos/{ipo_id}/insights
 ```
 
-Useful future endpoints:
-
-```text
-GET /health
-GET /ready
-```
-
-Where:
-
-- `/health` means the process is alive.
-- `/ready` means required dependencies are reachable.
-
----
-
-## 9. Security
-
-Before exposing the service publicly, address:
-
-- API rate limiting
-- request validation
-- authentication/authorization where required
-- CORS policy
-- secret management
-- database least privilege
-- safe logging
-- registrar request isolation
-- protection against abuse
-
-Never put tokens or database passwords into Git or Docker images.
-
----
-
-## 10. Production Deployment
-
-The eventual deployment can become:
-
-```mermaid
-flowchart LR
-    EDGE[Reverse Proxy / Edge]
-    API[FastAPI]
-    W[Worker]
-    DB[(PostgreSQL)]
-    EXT[External APIs]
-
-    EDGE --> API
-    API --> DB
-    W --> DB
-    W --> EXT
-```
-
-Only introduce additional infrastructure when the workload demonstrates a need for it.
-
----
-
-# Roadmap
-
-```text
-Phase 1 — Data Foundation                         DONE
-├── Upstox /ipos ingestion
-├── JSON staging
-├── /ipos/:id hydration
-├── PostgreSQL
-├── SQLAlchemy
-└── Alembic
-
-Phase 2 — Reproducible Environment                DONE
-├── Dockerfile
-├── Docker Compose
-├── Docker PostgreSQL
-├── Environment separation
-└── End-to-end Docker sync
-
-Phase 3 — API Layer                               NEXT
-├── FastAPI
-├── Health endpoints
-├── IPO listing endpoint
-├── IPO detail endpoint
-├── Filtering
-├── Sorting
-└── Pagination
-
-Phase 4 — Reliability
-├── Automated tests
-├── Sync scheduling
-├── Sync status
-├── Observability
-└── Rate limiting
-
-Phase 5 — Allotment System
-├── Registrar abstraction
-├── Registrar adapters
-├── Allotment service
-├── Job processing
-├── Retry/backoff
-└── Result persistence
-
-Phase 6 — Production
-├── Deployment
-├── Secrets management
-├── Backups
-├── Monitoring
-├── CI/CD
-└── Scaling where justified
-```
+This is deliberately deferred to a later version.
 
 ---
 
@@ -1023,6 +1221,18 @@ Run full synchronization:
 python sync.py
 ```
 
+Start API:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Run tests:
+
+```bash
+RUN_INTEGRATION_TESTS=1 pytest -q
+```
+
 Generate day-end exports:
 
 ```bash
@@ -1034,8 +1244,6 @@ Create a new migration after changing models:
 ```bash
 alembic revision --autogenerate -m "describe change"
 ```
-
----
 
 ## Docker
 
@@ -1087,7 +1295,7 @@ psql -U ipo_user -h localhost -p 5433 -d augur_project -W
 
 The system should remain easy to reason about as it grows.
 
-When a user asks for IPO data:
+When a client asks for IPO data:
 
 ```text
 API → PostgreSQL
@@ -1096,20 +1304,31 @@ API → PostgreSQL
 When fresh IPO data is required:
 
 ```text
-Sync → Upstox → PostgreSQL
+Sync → Upstox → JSON staging → PostgreSQL
 ```
 
-When an allotment result is required:
+When the website needs homepage data:
+
+```text
+Website → /api/v1/home → PostgreSQL
+```
+
+When the website needs a full filtered list:
+
+```text
+Website → /api/v1/ipos → PostgreSQL
+```
+
+When an allotment result is eventually required:
 
 ```text
 API → Allotment Service → Registrar
 ```
 
-When the day ends:
+When document intelligence is eventually required:
 
 ```text
-Staging JSON → Batch Worker → Daily exports
+API → Document / RAG subsystem
 ```
 
-Each path has one clear responsibility. When something fails, the goal is to identify exactly where it failed instead of searching through one large process.
-
+Each path has one clear responsibility. The goal is to keep the v1 backend stable while later features are added as independent subsystems.
