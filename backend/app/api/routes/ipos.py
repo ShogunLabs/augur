@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-
+from app.exceptions import AppError
 from app.api.dependencies import get_db
+
 from app.schemas.ipo import (
     IPODetail,
     IPOListItem,
@@ -22,6 +23,7 @@ router = APIRouter(
 @router.get(
     "",
     response_model=IPOListResponse,
+    response_model_exclude_none=True,
 )
 def list_ipo_endpoint(
     status: str | None = Query(
@@ -65,6 +67,7 @@ def list_ipo_endpoint(
 @router.get(
     "/{ipo_id}",
     response_model=IPODetail,
+    response_model_exclude_none=True,
 )
 def get_ipo_endpoint(
     ipo_id: str,
@@ -76,9 +79,10 @@ def get_ipo_endpoint(
     )
 
     if not ipo:
-        raise HTTPException(
+        raise AppError(
+            code="IPO_NOT_FOUND",
+            message="IPO not found",
             status_code=404,
-            detail="IPO not found",
         )
 
     return ipo

@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Index,
     Integer,
     Numeric,
     String,
@@ -136,5 +137,40 @@ class IPO(Base):
         CheckConstraint(
             "issue_type IN ('regular', 'sme')",
             name="valid_issue_type",
+        ),
+
+        Index(
+            "ix_ipos_status_issue_type",
+            "status",
+            "issue_type",
+        ),
+
+        Index(
+            "ix_ipos_issue_type",
+            "issue_type",
+        ),
+
+        Index(
+            "ix_ipos_status_first_seen_at",
+            "status",
+            "first_seen_at",
+        ),
+
+        Index(
+            "ix_ipos_status_bidding_start_date",
+            "status",
+            "bidding_start_date",
+        ),
+
+        Index(
+            "ix_ipos_status_bidding_end_date",
+            "status",
+            "bidding_end_date",
+        ),
+
+        Index(
+            "ix_ipos_status_listing_date",
+            "status",
+            "listing_date",
         ),
     )
