@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-09-24T08:42:14.302627+00:00",
+  "fetched_at": "2026-09-24T09:26:18.625275+00:00",
   "status": "open",
   "count": 23,
   "data": [
@@ -76,7 +76,7 @@
       "maximum_price": 405.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.24"
+      "total_subscription": "0.45"
     },
     {
       "id": "moneyview-limited-ipo",
@@ -91,7 +91,7 @@
       "maximum_price": 34.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.93"
+      "total_subscription": "1.15"
     },
     {
       "id": "adroit-industries-india-limited-ipo",
@@ -106,7 +106,7 @@
       "maximum_price": 134.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "8.14"
+      "total_subscription": "16.27"
     },
     {
       "id": "armee-infotech-limited",
@@ -121,7 +121,7 @@
       "maximum_price": 375.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.77"
+      "total_subscription": "1.23"
     },
     {
       "id": "elevate-campuses-limited-ipo",
@@ -151,7 +151,7 @@
       "maximum_price": 185.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "1.53"
+      "total_subscription": "1.61"
     },
     {
       "id": "varmora-granito-limited-ipo",
@@ -166,7 +166,7 @@
       "maximum_price": 148.0,
       "bidding_start_date": "2026-09-22",
       "bidding_end_date": "2026-09-24",
-      "total_subscription": "0.39"
+      "total_subscription": "1.32"
     },
     {
       "id": "sai-urja-indo-ventures-limited-ipo",
@@ -241,7 +241,7 @@
       "maximum_price": 64.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.66"
+      "total_subscription": "0.81"
     },
     {
       "id": "coreintegra-consulting-services-limited-ipo",
@@ -256,7 +256,7 @@
       "maximum_price": 78.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.49"
+      "total_subscription": "0.52"
     },
     {
       "id": "liqvd-digital-india-limited-ipo",
@@ -271,7 +271,7 @@
       "maximum_price": 54.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "1.38"
+      "total_subscription": "1.39"
     },
     {
       "id": "pooja-logistics-limited-ipo",
@@ -286,7 +286,7 @@
       "maximum_price": 115.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.49"
+      "total_subscription": "0.5"
     },
     {
       "id": "skoffset-limited-ipo",
@@ -301,7 +301,7 @@
       "maximum_price": 125.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.33"
+      "total_subscription": "0.34"
     },
     {
       "id": "unitec-fibres-limited-ipo",
@@ -316,7 +316,7 @@
       "maximum_price": 88.0,
       "bidding_start_date": "2026-09-23",
       "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.17"
+      "total_subscription": "0.18"
     },
     {
       "id": "anand-seamless-limited-ipo",
@@ -331,7 +331,7 @@
       "maximum_price": 72.0,
       "bidding_start_date": "2026-09-22",
       "bidding_end_date": "2026-09-24",
-      "total_subscription": "1.23"
+      "total_subscription": "1.26"
     },
     {
       "id": "himalaya-nutravedics-india-limited-ipo",
@@ -346,7 +346,7 @@
       "maximum_price": 106.0,
       "bidding_start_date": "2026-09-22",
       "bidding_end_date": "2026-09-24",
-      "total_subscription": "1.48"
+      "total_subscription": "1.56"
     }
   ]
 }
