@@ -1,69 +1,118 @@
 # Augur Backend
 
-Backend data-ingestion layer for the Augur IPO project.
+Augur is an IPO data and allotment-checking backend focused on collecting IPO information, normalizing it, storing it in PostgreSQL, and exposing it through an API.
 
-## Current Scope
+The project is currently in the **data-ingestion and database foundation phase**. The next major phase is the API layer, followed by the registrar/allotment subsystem.
 
-At this stage the backend:
+---
 
-1. Fetches IPO summaries from the Upstox `/v2/ipos` endpoint.
-2. Stores those summaries in four JSON files grouped by IPO status.
-3. Reads the IPO IDs from those JSON files.
-4. Fetches complete IPO details from `/v2/ipos/{id}`.
-5. Stores the hydrated data in PostgreSQL using SQLAlchemy.
-6. Uses Alembic to version and reproduce the database schema.
+## Current Status
 
-The FastAPI API layer and allotment-checking layer are not implemented yet.
+- [x] Upstox IPO list ingestion through `/v2/ipos`
+- [x] Support for both `regular` and `sme` IPOs
+- [x] Status-based staging:
+  - `open.json`
+  - `closed.json`
+  - `upcoming.json`
+  - `listed.json`
+- [x] Full IPO hydration through `/v2/ipos/:id`
+- [x] PostgreSQL database
+- [x] SQLAlchemy ORM
+- [x] Alembic migrations
+- [x] UPSERT-based IPO persistence
+- [x] Day-end JSON/CSV/XLSX export
+- [x] Dockerized PostgreSQL + Python environment
+- [x] Sequential `sync.py` pipeline
+- [ ] FastAPI API layer
+- [ ] API pagination/filtering/sorting
+- [ ] Automated scheduled sync
+- [ ] Registrar abstraction
+- [ ] Allotment checker
+- [ ] API authentication/rate limiting
+- [ ] Automated tests and CI
+- [ ] Production deployment
 
-## Architecture
+---
 
-```text
-                         Upstox API
-                             |
-                             v
-                        GET /v2/ipos
-                             |
-                       get_ipos.py
-                             |
-          +------------------+------------------+
-          |                  |                  |
-          v                  v                  v
-      open.json         closed.json       upcoming.json
-          |                  |                  |
-          +------------------+------------------+
-                             |
-                         listed.json
-                             |
-                             v
-                      hydrate_ipos.py
-                             |
-                      Extract IPO IDs
-                             |
-                             v
-                    GET /v2/ipos/{id}
-                             |
-                             v
-                      Full IPO details
-                             |
-                             v
-                         SQLAlchemy
-                             |
-                             v
-                       PostgreSQL
-                         augur_project
-                             |
-                             v
-                           ipos
+# Architecture
+
+The current system intentionally separates **discovery**, **hydration**, and **storage**.
+
+```mermaid
+flowchart TD
+    U[Upstox API]
+
+    U1["GET /v2/ipos"]
+    U2["GET /v2/ipos/:id"]
+
+    G[get_ipos.py]
+    H[hydrate_ipos.py]
+    S[sync.py]
+
+    J1[open.json]
+    J2[closed.json]
+    J3[upcoming.json]
+    J4[listed.json]
+
+    DB[(PostgreSQL)]
+    A[Alembic]
+    M[SQLAlchemy Models]
+
+    BW[batch_worker.py]
+    DJSON[Daily JSON]
+    DCSV[Daily CSV]
+    DXLSX[Daily XLSX]
+
+    S --> G
+    G --> U1
+    U1 --> J1
+    U1 --> J2
+    U1 --> J3
+    U1 --> J4
+
+    S --> H
+    J1 --> H
+    J2 --> H
+    J3 --> H
+    J4 --> H
+    H --> U2
+    U2 --> H
+    H --> DB
+
+    M --> A
+    A --> DB
+
+    J1 --> BW
+    J2 --> BW
+    J3 --> BW
+    J4 --> BW
+
+    BW --> DJSON
+    BW --> DCSV
+    BW --> DXLSX
 ```
 
-The JSON files are staging/snapshot data from `/v2/ipos`. PostgreSQL is the canonical datastore for hydrated IPO information.
+### Why the pipeline is split this way
 
-## Project Structure
+- `/ipos` is the **discovery endpoint**.
+  - It tells us which IPOs exist for each lifecycle status and issue type.
+  - It is used to build the four local staging files.
+- `/ipos/:id` is the **hydration endpoint**.
+  - It provides the detailed IPO record.
+  - The returned record is normalized and persisted in PostgreSQL.
+- PostgreSQL is the **application source of truth**.
+  - The JSON files are staging/snapshot artifacts, not the permanent database.
+- The day-end batch worker produces human-friendly exports without changing the database.
+
+This separation gives the project a clean debugging path: discovery, hydration, normalization, and persistence can each be checked independently.
+
+---
+
+# Project Structure
 
 ```text
 backend/
 ├── app/
-│   ├── __init__.py
 │   ├── database.py
 │   └── models.py
 │
@@ -74,229 +123,432 @@ backend/
 │   └── listed.json
 │
 ├── migrations/
-│   ├── versions/
-│   │   └── <initial migration>.py
 │   ├── env.py
 │   ├── script.py.mako
-│   └── README
+│   └── versions/
 │
+├── exports/
+│   └── daily/
+│       └── YYYY-MM-DD/
+│           ├── ipos.json
+│           ├── ipos.csv
+│           └── ipos.xlsx
+│
+├── .dockerignore
 ├── .env
+├── .env.docker
 ├── .env.example
 ├── alembic.ini
+├── batch_worker.py
+├── docker-compose.yml
+├── Dockerfile
 ├── get_ipos.py
 ├── hydrate_ipos.py
 ├── requirements.txt
-├── .gitignore
-└── README.md
+├── setup.sh
+└── sync.py
 ```
 
-Never commit `.env` or the Upstox access token.
+### Important files
 
-## Prerequisites
+- `app/database.py`
+  - SQLAlchemy engine and session configuration.
+  - Reads database configuration from environment variables.
+- `app/models.py`
+  - Defines the PostgreSQL schema through SQLAlchemy.
+- `get_ipos.py`
+  - Calls Upstox `/ipos`.
+  - Handles status + issue-type combinations.
+  - Handles pagination.
+  - Writes the four JSON staging files.
+- `hydrate_ipos.py`
+  - Reads the four JSON files.
+  - Collects unique IPO IDs.
+  - Calls `/ipos/:id`.
+  - Normalizes the complete response.
+  - UPSERTs into PostgreSQL.
+- `sync.py`
+  - Executes `get_ipos.py` first.
+  - Executes `hydrate_ipos.py` only after discovery succeeds.
+- `batch_worker.py`
+  - Reads the four JSON files.
+  - Produces day-end JSON, CSV, and Excel exports.
+  - Excel contains separate sheets for `All IPOs`, `Open`, `Upcoming`, `Closed`, and `Listed`.
+- `migrations/`
+  - Contains version-controlled Alembic migrations.
+  - Required for reproducing the schema on another machine.
+- `Dockerfile`
+  - Builds the Python application image.
+- `docker-compose.yml`
+  - Runs the Python backend and PostgreSQL together.
+- `setup.sh`
+  - Intended to bootstrap the environment on a fresh machine.
 
-Recommended environment:
+---
 
-- Linux/Debian/Ubuntu
-- Python 3.13+
-- PostgreSQL 17+
-- Git
+# Database Design
 
-Python dependencies currently include:
+The current PostgreSQL design intentionally keeps the model simple.
 
-- SQLAlchemy 2.x
-- Psycopg 3
-- Alembic
-- httpx
-- python-dotenv
+There is one primary `ipos` table for both regular and SME IPOs.
 
-## 1. Clone the Repository
-
-```bash
-git clone <REPOSITORY_URL>
-cd augur/backend
+```mermaid
+erDiagram
+    IPO {
+        string id PK
+        string symbol
+        string name
+        string status
+        string isin
+        string issue_type
+        numeric issue_size
+        string industry
+        numeric minimum_price
+        numeric maximum_price
+        date bidding_start_date
+        date bidding_end_date
+        time daily_start_time
+        time daily_end_time
+        numeric face_value
+        numeric tick_size
+        integer lot_size
+        integer minimum_quantity
+        numeric cut_off_price
+        numeric listing_price
+        string listing_exchange
+        date pre_apply_start_date
+        date application_start_date
+        date application_end_date
+        date allotment_start_date
+        date allotment_date
+        date refund_initiation_date
+        date listing_date
+        date mandate_end_date
+        string rhp_url
+        string drhp_url
+        numeric total_subscription
+        jsonb timeline
+        jsonb registrar_info
+        jsonb raw_data
+        timestamp first_seen_at
+        timestamp last_synced_at
+        timestamp updated_at
+    }
 ```
 
-## 2. Create the Python Environment
+## Regular vs SME
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
+Regular and SME IPOs are **not separate tables**.
 
-If the dependency file is not available yet:
-
-```bash
-pip install sqlalchemy 'psycopg[binary]' alembic httpx python-dotenv
-```
-
-## 3. PostgreSQL Setup
-
-Check PostgreSQL:
-
-```bash
-sudo systemctl status postgresql
-pg_lsclusters
-```
-
-The PostgreSQL cluster should be `online` on port `5432`.
-
-Create the application role and database:
-
-```bash
-sudo -u postgres psql
-```
-
-```sql
-CREATE ROLE ipo_user LOGIN PASSWORD 'YOUR_PASSWORD';
-CREATE DATABASE augur_project OWNER ipo_user;
-```
-
-If the role already exists, reset its password:
-
-```sql
-\password ipo_user
-```
-
-Verify:
-
-```sql
-\du
-\l
-```
-
-Exit:
-
-```sql
-\q
-```
-
-Test the database login:
-
-```bash
-psql -U ipo_user -h localhost -d augur_project -W
-```
-
-Inside `psql`:
-
-```sql
-\conninfo
-```
-
-Expected database/user:
+They are represented by:
 
 ```text
-augur_project / ipo_user
+issue_type = regular
+issue_type = sme
 ```
 
-## 4. Environment Variables
+Lifecycle status is represented by:
 
-Create `.env` from `.env.example`:
-
-```bash
-cp .env.example .env
+```text
+status = upcoming
+status = open
+status = closed
+status = listed
 ```
 
-Configure:
+Examples:
+
+```sql
+SELECT *
+FROM ipos
+WHERE status = 'open';
+
+SELECT *
+FROM ipos
+WHERE issue_type = 'sme';
+
+SELECT *
+FROM ipos
+WHERE status = 'open'
+  AND issue_type = 'sme';
+```
+
+## Dates
+
+Frequently queried dates such as:
+
+- `bidding_start_date`
+- `bidding_end_date`
+- `allotment_date`
+- `listing_date`
+
+are stored as PostgreSQL columns so they can be sorted and filtered efficiently.
+
+The complete nested `timeline` object is also preserved as JSONB.
+
+The same principle applies to `registrar_info` and `raw_data`.
+
+---
+
+# Environment Variables
+
+## Native development
+
+Native development uses `.env`.
 
 ```env
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=augur_project
 DB_USER=ipo_user
-DB_PASSWORD=YOUR_PASSWORD
+DB_PASSWORD=your_password
 
-UPSTOX_ACCESS_TOKEN=YOUR_UPSTOX_ACCESS_TOKEN
+UPSTOX_ACCESS_TOKEN=your_upstox_access_token
 ```
 
-Do not commit `.env`.
+## Docker development
 
-## 5. Test SQLAlchemy
+Docker uses `.env.docker`.
+
+```env
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=augur_project
+DB_USER=ipo_user
+DB_PASSWORD=your_password
+
+UPSTOX_ACCESS_TOKEN=your_upstox_access_token
+```
+
+The important difference is:
+
+```text
+Native PostgreSQL:
+DB_HOST=localhost
+
+Docker PostgreSQL:
+DB_HOST=postgres
+```
+
+`postgres` is the PostgreSQL service name in `docker-compose.yml`.
+
+### Security
+
+Never commit:
+
+```text
+.env
+.env.docker
+```
+
+Commit:
+
+```text
+.env.example
+```
+
+with empty placeholders.
+
+---
+
+# Native Setup
+
+Use this when Python and PostgreSQL are already installed directly on the machine.
+
+## Prerequisites
+
+- Python 3.13+
+- PostgreSQL 17 or a compatible supported version
+- Git
+- A valid Upstox access token
+
+## 1. Clone the repository
 
 ```bash
-python3 -c "from app.database import engine; c=engine.connect(); print('Database connection: OK'); c.close()"
+git clone <repository-url>
+cd augur/backend
 ```
 
-Expected:
-
-```text
-Database connection: OK
-```
-
-Verify the loaded non-secret settings:
+## 2. Create a virtual environment
 
 ```bash
-python3 -c "from app.database import DB_HOST, DB_PORT, DB_NAME, DB_USER; print(DB_HOST, DB_PORT, DB_NAME, DB_USER)"
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-Expected:
+## 3. Install dependencies
 
-```text
-localhost 5432 augur_project ipo_user
+```bash
+pip install -r requirements.txt
 ```
 
-## 6. Create the Database Schema
+## 4. Configure environment
 
-The SQLAlchemy model is in:
-
-```text
-app/models.py
+```bash
+cp .env.example .env
 ```
 
-The current database has one main table:
+Edit `.env` and provide PostgreSQL credentials and the Upstox access token.
 
-```text
-ipos
+## 5. Create the PostgreSQL database
+
+Example:
+
+```sql
+CREATE USER ipo_user WITH PASSWORD 'your_password';
+CREATE DATABASE augur_project OWNER ipo_user;
 ```
 
-Regular and SME IPOs share the same table and are distinguished by:
-
-```text
-issue_type = regular | sme
-```
-
-IPO lifecycle status is:
-
-```text
-upcoming | open | closed | listed
-```
-
-Nested Upstox data is also preserved:
-
-- `timeline` → JSONB
-- `registrar_info` → JSONB
-- `raw_data` → complete `/ipos/{id}` payload as JSONB
-
-Apply all committed migrations:
+## 6. Apply schema migrations
 
 ```bash
 alembic upgrade head
 ```
 
-Verify the schema:
+## 7. Run the complete IPO sync
 
 ```bash
-psql -U ipo_user -h localhost -d augur_project -W
+python sync.py
 ```
 
-```sql
-\dt
-\d ipos
-```
-
-You should see:
+This runs:
 
 ```text
-alembic_version
-ipos
+get_ipos.py
+    ↓
+JSON staging files
+    ↓
+hydrate_ipos.py
+    ↓
+PostgreSQL
 ```
 
-## 7. Fetch IPO Summary Data
+## 8. Generate day-end exports
 
-`get_ipos.py` only handles the list endpoint.
+```bash
+python batch_worker.py
+```
 
-It fetches all combinations of:
+Output:
+
+```text
+exports/daily/YYYY-MM-DD/
+├── ipos.json
+├── ipos.csv
+└── ipos.xlsx
+```
+
+The workbook contains:
+
+- `All IPOs`
+- `Open`
+- `Upcoming`
+- `Closed`
+- `Listed`
+
+---
+
+# Docker Setup
+
+Docker is the preferred reproducible environment for team development.
+
+## 1. Prerequisites
+
+- Docker
+- Docker Compose
+- Git
+
+PostgreSQL does not need to be installed on the host for the Docker workflow.
+
+## 2. Clone the repository
+
+```bash
+git clone <repository-url>
+cd augur/backend
+```
+
+## 3. Configure Docker credentials
+
+```bash
+cp .env.example .env.docker
+```
+
+Edit `.env.docker`:
+
+```env
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=augur_project
+DB_USER=ipo_user
+DB_PASSWORD=your_password
+UPSTOX_ACCESS_TOKEN=your_upstox_access_token
+```
+
+## 4. Build and start containers
+
+```bash
+docker compose up -d
+```
+
+Check:
+
+```bash
+docker compose ps
+```
+
+The PostgreSQL service should report `healthy`.
+
+## 5. Apply migrations
+
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+## 6. Run synchronization
+
+```bash
+docker compose exec backend python sync.py
+```
+
+## 7. Generate day-end exports
+
+```bash
+docker compose exec backend python batch_worker.py
+```
+
+## Docker architecture
+
+```mermaid
+flowchart LR
+    B[Backend container]
+    P[Postgres container]
+    V[(postgres_data volume)]
+    U[Upstox API]
+
+    B -->|postgres:5432| P
+    P --> V
+    B -->|HTTPS| U
+```
+
+The native PostgreSQL instance and Docker PostgreSQL are separate databases.
+
+With the current Compose setup:
+
+```text
+Host:
+localhost:5433
+
+Docker network:
+postgres:5432
+```
+
+---
+
+# Data Flow
+
+## Discovery
+
+`get_ipos.py` queries the Upstox list endpoint for:
 
 ```text
 upcoming + regular
@@ -309,229 +561,555 @@ listed + regular
 listed + sme
 ```
 
-Pagination is handled by the script.
+It handles pagination and writes the four status files.
 
-The resulting summaries are written to:
+## Hydration
 
-```text
-ipos/open.json
-ipos/closed.json
-ipos/upcoming.json
-ipos/listed.json
-```
-
-Run:
-
-```bash
-python3 get_ipos.py
-```
-
-These files contain the list-level fields needed to identify an IPO, especially the Upstox `id`.
-
-## 8. Hydrate Full IPO Details
-
-`hydrate_ipos.py` reads the four existing JSON files. It does not create another set of JSON files.
-
-Flow:
+`hydrate_ipos.py` reads all four JSON files, creates a unique set of IPO IDs, then calls:
 
 ```text
-open.json
-closed.json
-upcoming.json
-listed.json
-      |
-      v
-unique IPO IDs
-      |
-      v
 GET /v2/ipos/{id}
-      |
-      v
-normalize full response
-      |
-      v
-PostgreSQL UPSERT
 ```
 
-Run:
+The full response is normalized and inserted with PostgreSQL UPSERT semantics.
 
-```bash
-python3 hydrate_ipos.py
-```
+Repeated hydration does not create duplicates.
 
-For each IPO the script:
+## Persistence
 
-1. Fetches the complete `/v2/ipos/{id}` record.
-2. Converts dates/times/numeric values to PostgreSQL-compatible types.
-3. Stores queryable fields in regular PostgreSQL columns.
-4. Stores `timeline` as JSONB.
-5. Stores `registrar_info` as JSONB.
-6. Stores the original `data` object as `raw_data` JSONB.
-7. UPSERTs using `ipos.id` as the primary key.
+PostgreSQL contains:
 
-Repeated runs do not create duplicate IPO rows.
+- structured columns for commonly queried IPO fields
+- JSONB for `timeline`
+- JSONB for `registrar_info`
+- JSONB for the complete `raw_data`
 
-## 9. Verify the Data
+This keeps the database queryable while preserving the upstream payload.
 
-Count rows:
+## Day-end export
 
-```sql
-SELECT COUNT(*) FROM ipos;
-```
-
-View recent records:
-
-```sql
-SELECT
-    id,
-    symbol,
-    name,
-    status,
-    issue_type,
-    listing_date
-FROM ipos
-ORDER BY first_seen_at DESC
-LIMIT 10;
-```
-
-View status/type distribution:
-
-```sql
-SELECT
-    status,
-    issue_type,
-    COUNT(*)
-FROM ipos
-GROUP BY status, issue_type
-ORDER BY status, issue_type;
-```
-
-Inspect registrar JSON:
-
-```sql
-SELECT id, registrar_info
-FROM ipos
-LIMIT 5;
-```
-
-Inspect the preserved raw Upstox payload:
-
-```sql
-SELECT
-    id,
-    raw_data->>'symbol' AS symbol,
-    raw_data->>'name' AS name
-FROM ipos
-LIMIT 5;
-```
-
-## 10. Database Migrations
-
-The project uses Alembic for schema versioning.
-
-After changing `app/models.py`:
-
-```bash
-alembic revision --autogenerate -m "describe the change"
-```
-
-Review the generated migration in:
+`batch_worker.py` reads the four JSON files and creates:
 
 ```text
-migrations/versions/
+ipos.json
+ipos.csv
+ipos.xlsx
 ```
 
-Then apply it:
+It does not fetch Upstox data itself.
 
-```bash
-alembic upgrade head
+---
+
+# Why the JSON Layer Exists
+
+The JSON files are a deliberate checkpoint between two independent operations:
+
+```text
+Upstox /ipos
+     ↓
+JSON files
+     ↓
+/ipos/:id
+     ↓
+PostgreSQL
 ```
 
-Useful commands:
+This gives us:
 
-```bash
-alembic current
-alembic history
+- easier debugging
+- a clear audit point
+- retryable hydration
+- a snapshot of the list endpoint
+- simpler inspection of regular vs SME and status changes
+
+They are staging/snapshot artifacts. PostgreSQL remains the application source of truth.
+
+---
+
+# Development Principles
+
+- Keep external API calls inside integration code.
+- Keep database access separate from route handlers.
+- Keep PostgreSQL as the application source of truth.
+- Keep Alembic migrations under version control.
+- Keep the public API contract separate from the SQLAlchemy model.
+- Keep repeated synchronization idempotent.
+- Preserve raw upstream data where practical.
+- Do not add Redis, Kafka, Celery, or other infrastructure until a real workload justifies it.
+- Treat external APIs and registrars as unreliable dependencies: use timeouts, retries, validation, and controlled concurrency where appropriate.
+
+---
+
+# Next Development Phase
+
+The current foundation is complete enough to move into the service layer. The next work should be done deliberately rather than by adding features indiscriminately.
+
+## 1. FastAPI API Layer — Highest Priority
+
+Build the public API on top of PostgreSQL.
+
+Initial endpoints:
+
+```text
+GET /health
+GET /api/v1/ipos
+GET /api/v1/ipos/{ipo_id}
 ```
 
-Migration files under `migrations/versions/` should be committed to Git.
+Then add:
 
-## Reproduce the Current State on Another Server
+```text
+status
+issue_type
+pagination
+sorting
+```
 
-After installing PostgreSQL:
+Examples:
+
+```text
+/api/v1/ipos?status=open
+/api/v1/ipos?issue_type=sme
+/api/v1/ipos?status=open&issue_type=sme
+/api/v1/ipos?page=1&limit=20
+```
+
+### What deserves attention here
+
+The API should not become a thin copy of Upstox.
+
+The public contract should be stable and designed around what Augur needs. Upstox should remain an implementation detail of the ingestion pipeline.
+
+---
+
+## 2. Repository / Service Separation
+
+Before adding many endpoints, introduce:
+
+```mermaid
+flowchart TD
+    R[FastAPI Route]
+    S[IPO Service]
+    REPO[IPO Repository]
+    DB[(PostgreSQL)]
+
+    R --> S
+    S --> REPO
+    REPO --> DB
+```
+
+Responsibilities:
+
+- Route: HTTP request/response concerns.
+- Service: application/business logic.
+- Repository: database operations.
+- Model: database structure.
+- Schema: public API structure.
+
+This makes later features much easier to add without turning route handlers into large functions.
+
+---
+
+## 3. Smart Synchronization
+
+The current hydration loop is intentionally simple.
+
+Eventually it should become status-aware:
+
+```text
+open       → refresh frequently
+upcoming   → refresh periodically
+closed     → refresh less frequently
+listed     → refresh rarely
+```
+
+Use synchronization timestamps such as:
+
+```text
+first_seen_at
+last_synced_at
+updated_at
+details_fetched_at
+```
+
+to decide when an IPO actually needs another detail request.
+
+This should be measured before being optimized heavily.
+
+---
+
+## 4. Scheduler / Worker Design
+
+Once the API exists, turn sync into scheduled jobs:
+
+```mermaid
+flowchart TD
+    S[Scheduler]
+    I[IPO Sync]
+    E[Day-end Export]
+    DB[(PostgreSQL)]
+    F[Daily Files]
+
+    S --> I
+    S --> E
+    I --> DB
+    E --> F
+```
+
+A reasonable operational sequence is:
+
+```text
+Periodic sync
+    ↓
+PostgreSQL updated
+
+End-of-day sync
+    ↓
+latest staging files
+    ↓
+day-end export
+```
+
+---
+
+## 5. Registrar and Allotment System — Major Feature
+
+The current `registrar_info` JSONB is enough to identify the registrar, but the allotment checker should be its own subsystem.
+
+Target architecture:
+
+```mermaid
+flowchart TD
+    API[Allotment API]
+    S[Allotment Service]
+    R[Registrar Resolver]
+
+    API --> S
+    S --> R
+
+    R --> K[KFintech Adapter]
+    R --> L[Link Intime Adapter]
+    R --> SK[Skyline Adapter]
+    R --> O[Other Registrar Adapters]
+```
+
+Every registrar should follow a common interface, conceptually:
+
+```text
+check_application(...)
+        ↓
+AllotmentResult
+```
+
+### This area needs especially careful design
+
+Registrar systems can differ in:
+
+- request format
+- application number rules
+- PAN handling
+- captcha behavior
+- response structure
+- rate limits
+- downtime
+- anti-automation behavior
+
+Assume any registrar can fail at any time.
+
+The allotment service should isolate those failures rather than allowing one registrar to destabilize the entire API.
+
+---
+
+## 6. Queueing and Controlled Concurrency
+
+Eventually:
+
+```mermaid
+flowchart LR
+    U[User]
+    API[FastAPI]
+    Q[Job Queue]
+    W[Controlled Worker]
+    R[Registrar]
+
+    U --> API
+    API --> Q
+    Q --> W
+    W --> R
+```
+
+This gives us a place to enforce:
+
+- per-registrar concurrency limits
+- retries
+- timeouts
+- exponential backoff
+- job status
+- duplicate-job prevention
+
+Do not introduce a queue platform until there is a real need. The architecture should allow one later.
+
+---
+
+## 7. Automated Testing
+
+Before the allotment subsystem grows, introduce:
+
+```text
+Unit tests
+Integration tests
+API tests
+```
+
+Pay particular attention to:
+
+- duplicate IPO IDs
+- missing symbols
+- null optional fields
+- missing listing prices
+- malformed dates
+- pagination
+- Upstox authentication failures
+- empty API responses
+- repeated synchronization
+- failed database transactions
+- registrar failures
+
+A sync run should be safe to repeat.
+
+---
+
+## 8. Observability
+
+Before production, record:
+
+```text
+sync duration
+IPO count discovered
+IPO count hydrated
+hydration failures
+Upstox errors
+database errors
+registrar errors
+last successful sync
+```
+
+Useful future endpoints:
+
+```text
+GET /health
+GET /ready
+```
+
+Where:
+
+- `/health` means the process is alive.
+- `/ready` means required dependencies are reachable.
+
+---
+
+## 9. Security
+
+Before exposing the service publicly, address:
+
+- API rate limiting
+- request validation
+- authentication/authorization where required
+- CORS policy
+- secret management
+- database least privilege
+- safe logging
+- registrar request isolation
+- protection against abuse
+
+Never put tokens or database passwords into Git or Docker images.
+
+---
+
+## 10. Production Deployment
+
+The eventual deployment can become:
+
+```mermaid
+flowchart LR
+    EDGE[Reverse Proxy / Edge]
+    API[FastAPI]
+    W[Worker]
+    DB[(PostgreSQL)]
+    EXT[External APIs]
+
+    EDGE --> API
+    API --> DB
+    W --> DB
+    W --> EXT
+```
+
+Only introduce additional infrastructure when the workload demonstrates a need for it.
+
+---
+
+# Roadmap
+
+```text
+Phase 1 — Data Foundation                         DONE
+├── Upstox /ipos ingestion
+├── JSON staging
+├── /ipos/:id hydration
+├── PostgreSQL
+├── SQLAlchemy
+└── Alembic
+
+Phase 2 — Reproducible Environment                DONE
+├── Dockerfile
+├── Docker Compose
+├── Docker PostgreSQL
+├── Environment separation
+└── End-to-end Docker sync
+
+Phase 3 — API Layer                               NEXT
+├── FastAPI
+├── Health endpoints
+├── IPO listing endpoint
+├── IPO detail endpoint
+├── Filtering
+├── Sorting
+└── Pagination
+
+Phase 4 — Reliability
+├── Automated tests
+├── Sync scheduling
+├── Sync status
+├── Observability
+└── Rate limiting
+
+Phase 5 — Allotment System
+├── Registrar abstraction
+├── Registrar adapters
+├── Allotment service
+├── Job processing
+├── Retry/backoff
+└── Result persistence
+
+Phase 6 — Production
+├── Deployment
+├── Secrets management
+├── Backups
+├── Monitoring
+├── CI/CD
+└── Scaling where justified
+```
+
+---
+
+# Useful Commands
+
+## Native
+
+Activate environment:
 
 ```bash
-git clone <REPOSITORY_URL>
-cd augur/backend
-
-python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-
-cp .env.example .env
 ```
 
-Configure `.env`, create the `ipo_user` PostgreSQL role and `augur_project` database, then run:
+Run migrations:
 
 ```bash
 alembic upgrade head
-python3 get_ipos.py
-python3 hydrate_ipos.py
 ```
 
-Verify:
+Run full synchronization:
 
 ```bash
-psql -U ipo_user -h localhost -d augur_project -W
+python sync.py
 ```
 
-```sql
-SELECT COUNT(*) FROM ipos;
+Generate day-end exports:
+
+```bash
+python batch_worker.py
 ```
 
-At this point the current ingestion/database stage is reproduced.
+Create a new migration after changing models:
 
-## Current Development Flow
+```bash
+alembic revision --autogenerate -m "describe change"
+```
+
+---
+
+## Docker
+
+Start services:
+
+```bash
+docker compose up -d
+```
+
+Check services:
+
+```bash
+docker compose ps
+```
+
+Apply migrations:
+
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+Run synchronization:
+
+```bash
+docker compose exec backend python sync.py
+```
+
+Generate exports:
+
+```bash
+docker compose exec backend python batch_worker.py
+```
+
+Open a shell:
+
+```bash
+docker compose exec backend bash
+```
+
+Connect to Docker PostgreSQL from the host:
+
+```bash
+psql -U ipo_user -h localhost -p 5433 -d augur_project -W
+```
+
+---
+
+# Guiding Idea
+
+The system should remain easy to reason about as it grows.
+
+When a user asks for IPO data:
 
 ```text
-Upstox /v2/ipos
-        |
-        v
-get_ipos.py
-        |
-        v
-open.json / closed.json / upcoming.json / listed.json
-        |
-        v
-hydrate_ipos.py
-        |
-        v
-Upstox /v2/ipos/{id}
-        |
-        v
-PostgreSQL ipos table
+API → PostgreSQL
 ```
 
-## Current Scope
+When fresh IPO data is required:
 
-Implemented:
+```text
+Sync → Upstox → PostgreSQL
+```
 
-- PostgreSQL database
-- SQLAlchemy database layer
-- IPO SQLAlchemy model
-- Alembic migrations
-- Upstox `/v2/ipos` ingestion
-- status-based JSON staging
-- Upstox `/v2/ipos/{id}` hydration
-- PostgreSQL UPSERT
-- raw and nested JSON preservation
+When an allotment result is required:
 
-Not implemented yet:
+```text
+API → Allotment Service → Registrar
+```
 
-- FastAPI endpoints
-- `/health`
-- registrar-specific allotment checker
-- background scheduler
-- caching
-- authentication/authorization
-- frontend
+When the day ends:
+
+```text
+Staging JSON → Batch Worker → Daily exports
+```
+
+Each path has one clear responsibility. When something fails, the goal is to identify exactly where it failed instead of searching through one large process.
+
