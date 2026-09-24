@@ -1,62 +1,74 @@
-```
-# Go-specific ignores
-go.sum
-*.mod
-*.sum
-vendor/
-
-# Dependencies
-node_modules/
-**/node_modules/
-
-# Build artifacts
-dist/
-build/
-target/
-coverage/
-htmlcov/
-*.out
-*.exe
-*.dll
-*.so
-*.a
-*.o
-*.obj
-
-# Python-related (if any Python in project)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
+# -------------------------
+# Environment / secrets
+# -------------------------
 .env
-.env.local
+.env.*
+!.env.example
 
-# Logs and temporary files
-*.log
-*.tmp
-*.swp
-*.swo
+# -------------------------
+# Python
+# -------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# -------------------------
+# Testing / coverage
+# -------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
-# Editors/IDEs
+# -------------------------
+# IDE / editors
+# -------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Coverage
-.coverage
-coverage.xml
+# -------------------------
+# OS
+# -------------------------
+.DS_Store
+Thumbs.db
 
-# Cache directories
-.mypy_cache/
-.pytest_cache/
-.gradle/
-```
+# -------------------------
+# Generated IPO snapshots
+# -------------------------
+ipos/
+
+# -------------------------
+# Generated daily exports
+# -------------------------
+exports/
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+
+# -------------------------
+# Build / packaging
+# -------------------------
+build/
+dist/
+*.egg-info/
+
+# -------------------------
+# Local database / data
+# -------------------------
+*.sqlite
+*.sqlite3
+
+# -------------------------
+# Temporary files
+# -------------------------
+*.tmp
+*.temp
