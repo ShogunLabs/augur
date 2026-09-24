@@ -60,6 +60,8 @@ python-dotenv
 SQLAlchemy
 psycopg[binary]
 XlsxWriter
+fastapi
+uvicorn[standard]
 EOF
 
     echo "Created requirements.txt"
