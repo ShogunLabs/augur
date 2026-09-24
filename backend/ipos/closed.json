@@ -1,38 +1,8 @@
 {
-  "fetched_at": "2026-09-23T20:46:05.170739+00:00",
+  "fetched_at": "2026-09-24T08:42:14.418625+00:00",
   "status": "closed",
-  "count": 8,
+  "count": 4,
   "data": [
-    {
-      "id": "national-stock-exchange-of-india-limited-ipo",
-      "symbol": "NSE",
-      "name": "National Stock Exchange of India IPO",
-      "status": "closed",
-      "isin": "INE721I01024",
-      "issue_type": "regular",
-      "issue_size": 22561.0,
-      "industry": "Finance",
-      "minimum_price": 1700.0,
-      "maximum_price": 1785.0,
-      "bidding_start_date": "2026-09-17",
-      "bidding_end_date": "2026-09-21",
-      "total_subscription": "6.62"
-    },
-    {
-      "id": "sonaselection-india-limited-ipo",
-      "symbol": "SONA",
-      "name": "Sonaselection India IPO",
-      "status": "closed",
-      "isin": "INE0LLZ01011",
-      "issue_type": "regular",
-      "issue_size": 142.0,
-      "industry": "Textile",
-      "minimum_price": 94.0,
-      "maximum_price": 99.0,
-      "bidding_start_date": "2026-09-17",
-      "bidding_end_date": "2026-09-21",
-      "total_subscription": "2.32"
-    },
     {
       "id": "robokidz-eduventures-limited-ipo",
       "symbol": "ROBOKIDZ",
@@ -92,36 +62,6 @@
       "bidding_start_date": "2026-09-18",
       "bidding_end_date": "2026-09-22",
       "total_subscription": "2.07"
-    },
-    {
-      "id": "spectraa-technology-solutions-limited-ipo",
-      "symbol": "SPECTRAA",
-      "name": "SpectraA Technology Solutions IPO",
-      "status": "closed",
-      "isin": "INE0GAN01010",
-      "issue_type": "sme",
-      "issue_size": 43.0,
-      "industry": null,
-      "minimum_price": 112.0,
-      "maximum_price": 118.0,
-      "bidding_start_date": "2026-09-17",
-      "bidding_end_date": "2026-09-21",
-      "total_subscription": "352.62"
-    },
-    {
-      "id": "kheria-autocomp-limited-ipo",
-      "symbol": "KHERIAAUTO",
-      "name": "Kheria Autocomp IPO",
-      "status": "closed",
-      "isin": "INE0HOL01013",
-      "issue_type": "sme",
-      "issue_size": 46.0,
-      "industry": "Auto Ancillary",
-      "minimum_price": 96.0,
-      "maximum_price": 101.0,
-      "bidding_start_date": "2026-09-17",
-      "bidding_end_date": "2026-09-21",
-      "total_subscription": "2.87"
     }
   ]
 }

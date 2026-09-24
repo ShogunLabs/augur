@@ -145,6 +145,7 @@ def main():
         "closed",
         "listed",
     ]
+    total_ipos = 0
 
     with httpx.Client() as client:
         for status in statuses:
@@ -171,6 +172,10 @@ def main():
                 status,
                 list(unique_ipos.values()),
             )
+
+            total_ipos += len(unique_ipos)
+
+    print(f"Total IPOs fetched across all statuses (Listed, Upcoming, Open, Closed): {total_ipos}")
 
 
 if __name__ == "__main__":

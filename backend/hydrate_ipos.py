@@ -241,7 +241,7 @@ def main():
 
     if not ipo_ids:
         print("Nothing to hydrate.")
-        return
+        return 0
 
     success = 0
     failed = 0
@@ -287,6 +287,8 @@ def main():
             print(f"- {item['id']}")
             print(f"  {item['error']}")
 
+    return 1 if failed else 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
