@@ -14,3 +14,6 @@ COPY . .
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# For manual sync inside container:
+# docker compose exec backend python sync.py

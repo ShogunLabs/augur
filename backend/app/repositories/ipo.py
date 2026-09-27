@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,8 @@ def get_ipos(
     sort: str,
     offset: int,
     limit: int,
+    from_date: date | None = None,
+    to_date: date | None = None,
 ) -> tuple[list[IPO], int]:
 
     filters = []
@@ -28,6 +32,14 @@ def get_ipos(
 
     if issue_type:
         filters.append(IPO.issue_type == issue_type)
+
+    # Date range filters the bidding window, which has a dedicated index
+    # (ix_ipos_status_bidding_start_date) and is the most common "when" filter.
+    if from_date is not None:
+        filters.append(IPO.bidding_start_date >= from_date)
+
+    if to_date is not None:
+        filters.append(IPO.bidding_start_date <= to_date)
 
     count_stmt = select(func.count(IPO.id))
 

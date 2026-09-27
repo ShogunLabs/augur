@@ -3,6 +3,8 @@ httpx
 python-dotenv
 SQLAlchemy
 psycopg[binary]
+asyncpg
 XlsxWriter
 fastapi
 uvicorn[standard]
+sqlalchemy[asyncio]

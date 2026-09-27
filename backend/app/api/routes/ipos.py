@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.exceptions import AppError
@@ -47,6 +49,8 @@ def list_ipo_endpoint(
         ge=1,
         le=100,
     ),
+    from_date: date | None = Query(default=None, description="Filter by bidding_start_date >= from_date (YYYY-MM-DD)"),
+    to_date: date | None = Query(default=None, description="Filter by bidding_start_date <= to_date (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
 ):
     items, pagination = list_ipos(
@@ -56,6 +60,8 @@ def list_ipo_endpoint(
         sort=sort,
         page=page,
         limit=limit,
+        from_date=from_date,
+        to_date=to_date,
     )
 
     return {
