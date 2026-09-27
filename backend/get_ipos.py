@@ -1,26 +1,41 @@
+import httpx
 import json
-import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import httpx
-from dotenv import load_dotenv
+from app.integrations.upstox import (
+    BASE_URL,
+    HEADERS,
+    RECORDS_PER_PAGE,
+    REQUEST_MIN_INTERVAL,
+    configure_logging,
+    with_retry,
+)
 
-load_dotenv()
+configure_logging()
+import logging
 
-ACCESS_TOKEN = os.getenv("UPSTOX_ACCESS_TOKEN")
+logger = logging.getLogger("augur.discovery")
 
-if not ACCESS_TOKEN:
-    raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set in .env")
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / "ipos"
 
-BASE_URL = "https://api.upstox.com/v2/ipos"
-OUTPUT_DIR = Path("ipos")
-RECORDS_PER_PAGE = 30
+_last_request = 0.0
 
-HEADERS = {
-    "Accept": "application/json",
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
-}
+
+def _pace_request() -> None:
+    """Block until the upstream rate budget allows another request.
+
+    Sync (``httpx.Client``) path, so a plain ``time.sleep`` is fine — no
+    event loop to block.
+    """
+    global _last_request
+    now = time.monotonic()
+    wait = _last_request + REQUEST_MIN_INTERVAL - now
+    if wait > 0:
+        time.sleep(wait)
+    _last_request = time.monotonic()
 
 
 FIELDS = [
@@ -46,18 +61,23 @@ def fetch_page(
     issue_type: str,
     page_number: int,
 ) -> list[dict]:
-    response = client.get(
-        BASE_URL,
-        params={
-            "status": status,
-            "issue_type": issue_type,
-            "page_number": page_number,
-            "records": RECORDS_PER_PAGE,
-        },
-        headers=HEADERS,
-        timeout=30,
-    )
+    # Pace discovery requests so Upstox never sees a burst worth throttling.
+    # The shared retry logic is the backstop, not the main defence.
+    _pace_request()
 
+    response = with_retry(
+        lambda: client.get(
+            BASE_URL,
+            params={
+                "status": status,
+                "issue_type": issue_type,
+                "page_number": page_number,
+                "records": RECORDS_PER_PAGE,
+            },
+            headers=HEADERS,
+            timeout=30,
+        )
+    )
     response.raise_for_status()
 
     payload = response.json()
@@ -77,9 +97,11 @@ def fetch_all(
     page = 1
 
     while True:
-        print(
-            f"Fetching status={status}, "
-            f"issue_type={issue_type}, page={page}"
+        logger.info(
+            "Fetching status=%s, issue_type=%s, page=%s",
+            status,
+            issue_type,
+            page,
         )
 
         data = fetch_page(
@@ -135,7 +157,7 @@ def save_json(
             ensure_ascii=False,
         )
 
-    print(f"Saved {len(data)} IPOs → {path}")
+    logger.info("Saved %s IPOs -> %s", len(data), path)
 
 
 def main():
@@ -175,7 +197,11 @@ def main():
 
             total_ipos += len(unique_ipos)
 
-    print(f"Total IPOs fetched across all statuses (Listed, Upcoming, Open, Closed): {total_ipos}")
+    logger.info(
+        "Total IPOs fetched across all statuses "
+        "(Listed, Upcoming, Open, Closed): %s",
+        total_ipos,
+    )
 
 
 if __name__ == "__main__":

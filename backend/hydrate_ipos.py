@@ -1,26 +1,30 @@
+import argparse
+import asyncio
 import json
-import os
+import logging
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.database import engine
+from app.integrations.upstox import (
+    BASE_URL,
+    HEADERS,
+    RATE_LIMITER,
+    configure_logging,
+    with_retry_async,
+)
 from app.models import IPO
 
-load_dotenv(override=True)
+configure_logging()
 
-ACCESS_TOKEN = os.getenv("UPSTOX_ACCESS_TOKEN")
-
-if not ACCESS_TOKEN:
-    raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set in .env")
-
-BASE_URL = "https://api.upstox.com/v2/ipos"
-IPO_DIR = Path("ipos")
+BASE_DIR = Path(__file__).resolve().parent
+IPO_DIR = BASE_DIR / "ipos"
+FAILURE_LOG = BASE_DIR / "hydration_failures.json"
 
 FILES = [
     "open.json",
@@ -29,30 +33,26 @@ FILES = [
     "listed.json",
 ]
 
-HEADERS = {
-    "Accept": "application/json",
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
-}
+# Async HTTP: bounded concurrency + chunked commits
+CONCURRENCY = 10
+CHUNK_SIZE = 20
 
 
 def parse_date(value: str | None) -> date | None:
     if not value:
         return None
-
     return date.fromisoformat(value)
 
 
 def parse_time(value: str | None) -> time | None:
     if not value:
         return None
-
     return time.fromisoformat(value)
 
 
 def parse_decimal(value) -> Decimal | None:
     if value is None:
         return None
-
     return Decimal(str(value))
 
 
@@ -63,7 +63,7 @@ def load_ipo_ids() -> list[str]:
         path = IPO_DIR / filename
 
         if not path.exists():
-            print(f"Warning: {path} does not exist")
+            logging.warning("Warning: %s does not exist", path)
             continue
 
         with path.open("r", encoding="utf-8") as file:
@@ -78,33 +78,16 @@ def load_ipo_ids() -> list[str]:
     return sorted(ids)
 
 
-def fetch_ipo(
-    client: httpx.Client,
-    ipo_id: str,
-) -> dict:
-    response = client.get(
-        f"{BASE_URL}/{ipo_id}",
-        headers=HEADERS,
-        timeout=30,
-    )
+def load_failed_ids() -> list[str]:
+    """Read IPO IDs from the failure sidecar for targeted retries."""
+    if not FAILURE_LOG.exists():
+        logging.warning("No failure log found at %s", FAILURE_LOG)
+        return []
 
-    response.raise_for_status()
+    with FAILURE_LOG.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
 
-    payload = response.json()
-
-    if payload.get("status") != "success":
-        raise RuntimeError(
-            f"Upstox returned failure for {ipo_id}: {payload}"
-        )
-
-    data = payload.get("data")
-
-    if not data:
-        raise RuntimeError(
-            f"No IPO data returned for {ipo_id}"
-        )
-
-    return data
+    return [item["id"] for item in payload.get("failed", [])]
 
 
 def build_row(data: dict) -> dict:
@@ -121,85 +104,45 @@ def build_row(data: dict) -> dict:
         "isin": data.get("isin"),
         "issue_type": data["issue_type"],
 
-        "issue_size": parse_decimal(
-            data.get("issue_size")
-        ),
+        "issue_size": parse_decimal(data.get("issue_size")),
         "industry": data.get("industry"),
 
-        "minimum_price": parse_decimal(
-            data.get("minimum_price")
-        ),
-        "maximum_price": parse_decimal(
-            data.get("maximum_price")
-        ),
+        "minimum_price": parse_decimal(data.get("minimum_price")),
+        "maximum_price": parse_decimal(data.get("maximum_price")),
 
-        "bidding_start_date": parse_date(
-            data.get("bidding_start_date")
-        ),
-        "bidding_end_date": parse_date(
-            data.get("bidding_end_date")
-        ),
+        "bidding_start_date": parse_date(data.get("bidding_start_date")),
+        "bidding_end_date": parse_date(data.get("bidding_end_date")),
 
-        "daily_start_time": parse_time(
-            data.get("daily_start_time")
-        ),
-        "daily_end_time": parse_time(
-            data.get("daily_end_time")
-        ),
+        "daily_start_time": parse_time(data.get("daily_start_time")),
+        "daily_end_time": parse_time(data.get("daily_end_time")),
 
-        "face_value": parse_decimal(
-            data.get("face_value")
-        ),
-        "tick_size": parse_decimal(
-            data.get("tick_size")
-        ),
+        "face_value": parse_decimal(data.get("face_value")),
+        "tick_size": parse_decimal(data.get("tick_size")),
 
         "lot_size": data.get("lot_size"),
         "minimum_quantity": data.get("minimum_quantity"),
 
-        "cut_off_price": parse_decimal(
-            data.get("cut_off_price")
-        ),
+        "cut_off_price": parse_decimal(data.get("cut_off_price")),
 
-        "listing_price": parse_decimal(
-            data.get("listing_price")
-        ),
+        "listing_price": parse_decimal(data.get("listing_price")),
         "listing_exchange": data.get("listing_exchange"),
 
         # Timeline
-        "pre_apply_start_date": parse_date(
-            timeline.get("pre_apply_start_date")
-        ),
-        "application_start_date": parse_date(
-            timeline.get("application_start_date")
-        ),
-        "application_end_date": parse_date(
-            timeline.get("application_end_date")
-        ),
-        "allotment_start_date": parse_date(
-            timeline.get("allotment_start_date")
-        ),
-        "allotment_date": parse_date(
-            timeline.get("allotment_date")
-        ),
-        "refund_initiation_date": parse_date(
-            timeline.get("refund_initiation_date")
-        ),
-        "listing_date": parse_date(
-            timeline.get("listing_date")
-        ),
-        "mandate_end_date": parse_date(
-            timeline.get("mandate_end_date")
-        ),
+        "pre_apply_start_date": parse_date(timeline.get("pre_apply_start_date")),
+        "application_start_date": parse_date(timeline.get("application_start_date")),
+        "application_end_date": parse_date(timeline.get("application_end_date")),
+        "allotment_start_date": parse_date(timeline.get("allotment_start_date")),
+        "allotment_date": parse_date(timeline.get("allotment_date")),
+        "refund_initiation_date": parse_date(timeline.get("refund_initiation_date")),
+        "listing_date": parse_date(timeline.get("listing_date")),
+        "mandate_end_date": parse_date(timeline.get("mandate_end_date")),
 
         # Documents
         "rhp_url": data.get("rhp_url"),
         "drhp_url": data.get("drhp_url"),
 
         # Subscription
-        "total_subscription": parse_decimal(
-            data.get("total_subscription")
-        ),
+        "total_subscription": parse_decimal(data.get("total_subscription")),
 
         # Original nested data
         "timeline": timeline,
@@ -214,81 +157,169 @@ def build_row(data: dict) -> dict:
     }
 
 
-def upsert_ipo(
-    session: Session,
-    row: dict,
-) -> None:
-    stmt = insert(IPO).values(**row)
+async def fetch_ipo(
+    client: httpx.AsyncClient,
+    ipo_id: str,
+) -> dict:
+    """Async wrapper around the shared retry logic.
 
-    update_values = {
-        key: stmt.excluded[key]
-        for key in row
-        if key != "id"
-    }
+    The shared limiter paces requests so Upstox never sees a burst worth
+    throttling; ``with_retry_async`` awaits inside the retry loop so a 429
+    actually triggers a backoff instead of propagating.
+    """
+    await RATE_LIMITER.acquire()
 
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[IPO.id],
-        set_=update_values,
-    )
+    async def _get():
+        response = await client.get(
+            f"{BASE_URL}/{ipo_id}",
+            headers=HEADERS,
+            timeout=30,
+        )
+        # Raise inside the retried block so a 429/5xx response is actually
+        # retried instead of propagating straight to the failure log.
+        response.raise_for_status()
+        return response
 
-    session.execute(stmt)
+    response = await with_retry_async(_get)
+
+    payload = response.json()
+
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Upstox returned failure for {ipo_id}: {payload}")
+
+    data = payload.get("data")
+
+    if not data:
+        raise RuntimeError(f"No IPO data returned for {ipo_id}")
+
+    return data
 
 
-def main():
-    ipo_ids = load_ipo_ids()
+async def _process_batch(
+    session: AsyncSession,
+    client: httpx.AsyncClient,
+    ipo_ids: list[str],
+) -> tuple[int, list[dict]]:
+    """Fetch + upsert a batch of IPOs; return (success_count, failures_list)."""
+    semaphore = asyncio.Semaphore(CONCURRENCY)
 
-    print(f"Found {len(ipo_ids)} unique IPOs")
+    async def _fetch_one(ipo_id: str):
+        async with semaphore:
+            return await fetch_ipo(client, ipo_id)
 
-    if not ipo_ids:
-        print("Nothing to hydrate.")
-        return 0
+    results = await asyncio.gather(*[_fetch_one(i) for i in ipo_ids], return_exceptions=True)
 
     success = 0
-    failed = 0
-    failed_ids = []
+    failures = []
 
-    with httpx.Client() as client:
-        with Session(engine) as session:
-            for index, ipo_id in enumerate(ipo_ids, start=1):
-                print(
-                    f"[{index}/{len(ipo_ids)}] "
-                    f"Fetching {ipo_id}"
-                )
+    for ipo_id, result in zip(ipo_ids, results):
+        if isinstance(result, Exception):
+            failures.append({"id": ipo_id, "error": str(result)})
+            logging.error("ERROR: %s: %s", ipo_id, result)
+            continue
 
-                try:
-                    data = fetch_ipo(client, ipo_id)
-                    row = build_row(data)
+        row = build_row(result)
+        stmt = insert(IPO).values(**row)
+        update_values = {k: stmt.excluded[k] for k in row if k != "id"}
+        stmt = stmt.on_conflict_do_update(index_elements=[IPO.id], set_=update_values)
+        await session.execute(stmt)
 
-                    upsert_ipo(session, row)
-                    session.commit()
+        success += 1
 
-                    success += 1
+    await session.commit()
+    return success, failures
 
-                except Exception as exc:
-                    session.rollback()
 
-                    failed += 1
-                    failed_ids.append({
-                        "id": ipo_id,
-                        "error": str(exc),
-                    })
+async def main_async(only: str | None = None, retry_failed: bool = False) -> int:
+    global FILES
 
-                    print(f"  ERROR: {ipo_id}: {exc}")
+    if retry_failed:
+        ipo_ids = load_failed_ids()
+        if not ipo_ids:
+            logging.info("No failed IPOs to retry.")
+            return 0
+        logging.info("Retrying %s failed IPOs from %s", len(ipo_ids), FAILURE_LOG)
+    else:
+        if only is not None and only not in FILES:
+            raise ValueError(f"Unknown status {only!r}. Expected one of: {', '.join(FILES)}")
 
-    print()
-    print("Hydration complete")
-    print(f"Successful: {success}")
-    print(f"Failed:     {failed}")
+        if only is not None:
+            FILES = [only]
 
-    if failed_ids:
-        print("\nFailed IPOs:")
+        ipo_ids = load_ipo_ids()
 
-        for item in failed_ids:
-            print(f"- {item['id']}")
-            print(f"  {item['error']}")
+    logging.info("Found %s unique IPOs", len(ipo_ids))
 
-    return 1 if failed else 0
+    if not ipo_ids:
+        logging.info("Nothing to hydrate.")
+        return 0
+
+    # Async engine URL: swap sync driver for asyncpg
+    from app.database import engine as sync_engine
+    async_url = sync_engine.url.render_as_string(hide_password=False).replace("postgresql+psycopg", "postgresql+asyncpg")
+    async_engine = create_async_engine(async_url, pool_pre_ping=True)
+    async_session = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+
+    total_success = 0
+    total_failed = 0
+    all_failures = []
+
+    async with httpx.AsyncClient() as client:
+        async with async_session() as session:
+            for i in range(0, len(ipo_ids), CHUNK_SIZE):
+                chunk = ipo_ids[i:i + CHUNK_SIZE]
+                logging.info("Processing batch %s/%s (%s IPOs)", i // CHUNK_SIZE + 1, (len(ipo_ids) + CHUNK_SIZE - 1) // CHUNK_SIZE, len(chunk))
+
+                success, failures = await _process_batch(session, client, chunk)
+                total_success += success
+                total_failed += len(failures)
+                all_failures.extend(failures)
+
+    await async_engine.dispose()
+
+    logging.info("Hydration complete")
+    logging.info("Successful: %s", total_success)
+    logging.info("Failed:     %s", total_failed)
+
+    if all_failures:
+        logging.error("Failed IPOs:")
+        for item in all_failures:
+            logging.error("- %s", item["id"])
+            logging.error("  %s", item["error"])
+
+    # Always rewrite the sidecar so it reflects the current run.
+    # Empty list = clean run; non-empty = only the remaining failures.
+    with FAILURE_LOG.open("w", encoding="utf-8") as file:
+        json.dump(
+            {
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "failed": all_failures,
+            },
+            file,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    return 1 if total_failed else 0
+
+
+def main(only: str | None = None, retry_failed: bool = False) -> int:
+    return asyncio.run(main_async(only=only, retry_failed=retry_failed))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = argparse.ArgumentParser(
+        description="Hydrate IPO details into PostgreSQL."
+    )
+    parser.add_argument(
+        "--only",
+        default=None,
+        help="Hydrate a single lifecycle status (open|closed|upcoming|listed) instead of all four.",
+    )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry only the IPOs that failed in the previous run (reads hydration_failures.json).",
+    )
+    args = parser.parse_args()
+    raise SystemExit(main(only=args.only, retry_failed=args.retry_failed))

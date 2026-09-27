@@ -1,8 +1,38 @@
 {
-  "fetched_at": "2026-09-24T09:26:18.625275+00:00",
+  "fetched_at": "2026-09-27T10:41:27.612279+00:00",
   "status": "open",
-  "count": 23,
+  "count": 19,
   "data": [
+    {
+      "id": "shah-investors-home-limited-ipo",
+      "symbol": "SHAHINVEST",
+      "name": "Shah Investor’s Home IPO",
+      "status": "open",
+      "isin": "INE029N01014",
+      "issue_type": "regular",
+      "issue_size": 90.0,
+      "industry": "Finance - Housing",
+      "minimum_price": 159.0,
+      "maximum_price": 167.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-09-30",
+      "total_subscription": "0.0"
+    },
+    {
+      "id": "srit-india-limited-ipo",
+      "symbol": "SRIT",
+      "name": "SRIT India IPO",
+      "status": "open",
+      "isin": "INE307K01028",
+      "issue_type": "regular",
+      "issue_size": 218.0,
+      "industry": "IT - Software",
+      "minimum_price": 123.0,
+      "maximum_price": 130.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-09-30",
+      "total_subscription": "0.0"
+    },
     {
       "id": "acevector-limited-ipo",
       "symbol": "ACEVECTOR",
@@ -16,7 +46,7 @@
       "maximum_price": 32.0,
       "bidding_start_date": "2026-09-25",
       "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
+      "total_subscription": "0.22"
     },
     {
       "id": "german-green-steel-and-power-limited-ipo",
@@ -31,7 +61,7 @@
       "maximum_price": 139.0,
       "bidding_start_date": "2026-09-25",
       "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
+      "total_subscription": "1.73"
     },
     {
       "id": "orient-cables-india-limited-ipo",
@@ -46,7 +76,7 @@
       "maximum_price": 272.0,
       "bidding_start_date": "2026-09-25",
       "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
+      "total_subscription": "1.54"
     },
     {
       "id": "runwal-enterprises-limited-ipo",
@@ -61,7 +91,7 @@
       "maximum_price": 305.0,
       "bidding_start_date": "2026-09-25",
       "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
+      "total_subscription": "0.28"
     },
     {
       "id": "a-one-steels-india-limited-ipo",
@@ -76,7 +106,7 @@
       "maximum_price": 405.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.45"
+      "total_subscription": "1.16"
     },
     {
       "id": "moneyview-limited-ipo",
@@ -91,82 +121,112 @@
       "maximum_price": 34.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "1.15"
+      "total_subscription": "5.54"
     },
     {
-      "id": "adroit-industries-india-limited-ipo",
-      "symbol": "ADROITIND",
-      "name": "Adroit Industries (India) IPO",
+      "id": "shree-tnb-polymers-limited-ipo",
+      "symbol": "SHREETNB",
+      "name": "Shree TNB Polymers IPO",
       "status": "open",
-      "isin": "INE505M01015",
-      "issue_type": "regular",
-      "issue_size": 151.0,
-      "industry": "Auto Ancillary",
-      "minimum_price": 126.0,
-      "maximum_price": 134.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "16.27"
+      "isin": "INE935K01018",
+      "issue_type": "sme",
+      "issue_size": 31.0,
+      "industry": "Plastic Products",
+      "minimum_price": 47.0,
+      "maximum_price": 52.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-10-05",
+      "total_subscription": "0.0"
     },
     {
-      "id": "armee-infotech-limited",
-      "symbol": "ARMEE",
-      "name": "ArMee Infotech IPO",
+      "id": "acme-universal-safezone-9-limited-ipo",
+      "symbol": "ACMEUNIV",
+      "name": "Acme Universal Safezone 9 IPO",
       "status": "open",
-      "isin": "INE0TWE01016",
-      "issue_type": "regular",
-      "issue_size": 300.0,
+      "isin": "INE1KUL01020",
+      "issue_type": "sme",
+      "issue_size": 36.0,
+      "industry": "Footwear",
+      "minimum_price": 65.0,
+      "maximum_price": 71.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-09-30",
+      "total_subscription": "0.0"
+    },
+    {
+      "id": "pind-hospitality-limited-ipo",
+      "symbol": "PIND",
+      "name": "Pind Hospitality IPO",
+      "status": "open",
+      "isin": "INE0RNF01016",
+      "issue_type": "sme",
+      "issue_size": 18.0,
+      "industry": "Hotel",
+      "minimum_price": 93.0,
+      "maximum_price": 99.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-09-30",
+      "total_subscription": "0.0"
+    },
+    {
+      "id": "shivchem-agro-limited-ipo",
+      "symbol": "SHIVCHEM",
+      "name": "Shivchem Agro IPO",
+      "status": "open",
+      "isin": "INE18CU01023",
+      "issue_type": "sme",
+      "issue_size": 14.0,
+      "industry": "Pesticides & Agrochemicals",
+      "minimum_price": 59.0,
+      "maximum_price": 62.0,
+      "bidding_start_date": "2026-09-28",
+      "bidding_end_date": "2026-09-30",
+      "total_subscription": "0.0"
+    },
+    {
+      "id": "bench-mark-infotech-services-limited-ipo",
+      "symbol": "BMISL",
+      "name": "Bench Mark Infotech Services IPO",
+      "status": "open",
+      "isin": "INE2OKU01014",
+      "issue_type": "sme",
+      "issue_size": 42.0,
       "industry": "IT - Hardware",
-      "minimum_price": 350.0,
-      "maximum_price": 375.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "1.23"
+      "minimum_price": 104.0,
+      "maximum_price": 110.0,
+      "bidding_start_date": "2026-09-25",
+      "bidding_end_date": "2026-09-29",
+      "total_subscription": "0.6"
     },
     {
-      "id": "elevate-campuses-limited-ipo",
-      "symbol": "ELEVATE",
-      "name": "Elevate Campuses IPO",
+      "id": "dudani-retail-limited",
+      "symbol": "DUDANI",
+      "name": "Dudani Retail IPO",
       "status": "open",
-      "isin": "INE147X01013",
-      "issue_type": "regular",
-      "issue_size": 2100.0,
-      "industry": "Construction - Real Estate",
-      "minimum_price": 343.0,
-      "maximum_price": 362.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.27"
+      "isin": "INE1DLN01012",
+      "issue_type": "sme",
+      "issue_size": 11.0,
+      "industry": "Textile",
+      "minimum_price": 29.0,
+      "maximum_price": 29.0,
+      "bidding_start_date": "2026-09-25",
+      "bidding_end_date": "2026-09-29",
+      "total_subscription": "0.08"
     },
     {
-      "id": "swastika-infra-limited-ipo",
-      "symbol": "SWASTIKAIN",
-      "name": "Swastika Infra IPO",
+      "id": "himalayan-solar-limited-ipo",
+      "symbol": "HIMALAYAN",
+      "name": "Himalayan Solar IPO",
       "status": "open",
-      "isin": "INE1QJA01015",
-      "issue_type": "regular",
-      "issue_size": 161.0,
-      "industry": "Engineering - Construction",
-      "minimum_price": 175.0,
-      "maximum_price": 185.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "1.61"
-    },
-    {
-      "id": "varmora-granito-limited-ipo",
-      "symbol": "VARMORA",
-      "name": "Varmora Granito IPO",
-      "status": "open",
-      "isin": "INE0M5301040",
-      "issue_type": "regular",
-      "issue_size": 708.0,
-      "industry": "Ceramics/Marble/Granite/Sanitaryware",
-      "minimum_price": 140.0,
-      "maximum_price": 148.0,
-      "bidding_start_date": "2026-09-22",
-      "bidding_end_date": "2026-09-24",
-      "total_subscription": "1.32"
+      "isin": "INE1B7I01014",
+      "issue_type": "sme",
+      "issue_size": 68.0,
+      "industry": "Power Generation/Distribution",
+      "minimum_price": 98.0,
+      "maximum_price": 103.0,
+      "bidding_start_date": "2026-09-25",
+      "bidding_end_date": "2026-09-29",
+      "total_subscription": "0.45"
     },
     {
       "id": "sai-urja-indo-ventures-limited-ipo",
@@ -181,22 +241,7 @@
       "maximum_price": 113.0,
       "bidding_start_date": "2026-09-25",
       "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
-    },
-    {
-      "id": "shree-tnb-polymers-limited-ipo",
-      "symbol": "SHREETNB",
-      "name": "Shree TNB Polymers IPO",
-      "status": "open",
-      "isin": "INE935K01018",
-      "issue_type": "sme",
-      "issue_size": 31.0,
-      "industry": "Plastic Products",
-      "minimum_price": 47.0,
-      "maximum_price": 52.0,
-      "bidding_start_date": "2026-09-25",
-      "bidding_end_date": "2026-09-29",
-      "total_subscription": "0.0"
+      "total_subscription": "0.04"
     },
     {
       "id": "green-asia-impex-limited-ipo",
@@ -211,7 +256,7 @@
       "maximum_price": 90.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.01"
+      "total_subscription": "0.03"
     },
     {
       "id": "peshwa-wheat-limited-ipo",
@@ -226,7 +271,7 @@
       "maximum_price": 101.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "1.5"
+      "total_subscription": "3.13"
     },
     {
       "id": "roopa-screen-limited-ipo",
@@ -241,112 +286,7 @@
       "maximum_price": 64.0,
       "bidding_start_date": "2026-09-24",
       "bidding_end_date": "2026-09-28",
-      "total_subscription": "0.81"
-    },
-    {
-      "id": "coreintegra-consulting-services-limited-ipo",
-      "symbol": "COREIN",
-      "name": "Coreintegra Consulting Services IPO",
-      "status": "open",
-      "isin": "INE11ES01010",
-      "issue_type": "sme",
-      "issue_size": 22.0,
-      "industry": null,
-      "minimum_price": 74.0,
-      "maximum_price": 78.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.52"
-    },
-    {
-      "id": "liqvd-digital-india-limited-ipo",
-      "symbol": "LIQVD",
-      "name": "Liqvd Digital India IPO",
-      "status": "open",
-      "isin": "INE0CJT01025",
-      "issue_type": "sme",
-      "issue_size": 39.0,
-      "industry": null,
-      "minimum_price": 51.0,
-      "maximum_price": 54.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "1.39"
-    },
-    {
-      "id": "pooja-logistics-limited-ipo",
-      "symbol": "POOJALOGIS",
-      "name": "Pooja Logistics IPO",
-      "status": "open",
-      "isin": "INE1C2Q01017",
-      "issue_type": "sme",
-      "issue_size": 44.0,
-      "industry": "Logistics",
-      "minimum_price": 109.0,
-      "maximum_price": 115.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.5"
-    },
-    {
-      "id": "skoffset-limited-ipo",
-      "symbol": "SKOFFSET",
-      "name": "S.K.Offset IPO",
-      "status": "open",
-      "isin": "INE2MKZ01017",
-      "issue_type": "sme",
-      "issue_size": 29.0,
-      "industry": "Printing And Publishing",
-      "minimum_price": 119.0,
-      "maximum_price": 125.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.34"
-    },
-    {
-      "id": "unitec-fibres-limited-ipo",
-      "symbol": "UNITEC",
-      "name": "Unitec Fibres IPO",
-      "status": "open",
-      "isin": "INE0WOK01014",
-      "issue_type": "sme",
-      "issue_size": 34.0,
-      "industry": "Textile",
-      "minimum_price": 83.0,
-      "maximum_price": 88.0,
-      "bidding_start_date": "2026-09-23",
-      "bidding_end_date": "2026-09-25",
-      "total_subscription": "0.18"
-    },
-    {
-      "id": "anand-seamless-limited-ipo",
-      "symbol": "ANAND",
-      "name": "Anand Seamless IPO",
-      "status": "open",
-      "isin": "INE0XDX01018",
-      "issue_type": "sme",
-      "issue_size": 26.0,
-      "industry": "Steel & Iron Products",
-      "minimum_price": 72.0,
-      "maximum_price": 72.0,
-      "bidding_start_date": "2026-09-22",
-      "bidding_end_date": "2026-09-24",
-      "total_subscription": "1.26"
-    },
-    {
-      "id": "himalaya-nutravedics-india-limited-ipo",
-      "symbol": "HNIL",
-      "name": "Himalaya Nutravedics India IPO",
-      "status": "open",
-      "isin": "INE1OTR01013",
-      "issue_type": "sme",
-      "issue_size": 26.0,
-      "industry": null,
-      "minimum_price": 100.0,
-      "maximum_price": 106.0,
-      "bidding_start_date": "2026-09-22",
-      "bidding_end_date": "2026-09-24",
-      "total_subscription": "1.56"
+      "total_subscription": "6.02"
     }
   ]
 }

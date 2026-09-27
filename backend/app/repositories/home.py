@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import IPO
@@ -48,24 +48,6 @@ def get_home_sections(
         .limit(limit)
     )
 
-    allotted_stmt = (
-        select(IPO)
-        .where(
-            IPO.status == "closed",
-            IPO.allotment_date.is_not(None),
-            IPO.allotment_date <= today,
-            or_(
-                IPO.listing_date.is_(None),
-                IPO.listing_date > today,
-            ),
-        )
-        .order_by(
-            IPO.listing_date.asc().nulls_last(),
-            IPO.allotment_date.desc(),
-        )
-        .limit(limit)
-    )
-
     listed_stmt = (
         select(IPO)
         .where(IPO.status == "listed")
@@ -80,6 +62,5 @@ def get_home_sections(
         "upcoming": db.scalars(upcoming_stmt).all(),
         "open": db.scalars(open_stmt).all(),
         "closed": db.scalars(closed_stmt).all(),
-        # "allotted": db.scalars(allotted_stmt).all(),
         "listed": db.scalars(listed_stmt).all(),
     }

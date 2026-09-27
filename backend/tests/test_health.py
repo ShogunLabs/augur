@@ -5,16 +5,15 @@ import pytest
 
 @pytest.mark.integration
 def test_health(client):
-    if os.getenv("RUN_INTEGRATION_TESTS") != "1":
-        pytest.skip("Set RUN_INTEGRATION_TESTS=1 to run DB integration tests")
-
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {
-        "status": "ok"
+        "status": "ok",
     }
 
+
+@pytest.mark.integration
 def test_ready(client):
     response = client.get("/ready")
 
@@ -24,7 +23,8 @@ def test_ready(client):
 
     assert body["status"] == "ready"
     assert body["database"] == "ok"
-    
+
+
 def test_invalid_limit_returns_standard_error(client):
     response = client.get("/api/v1/ipos?limit=0")
 

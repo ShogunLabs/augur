@@ -25,12 +25,15 @@ The current release is focused on the **IPO data foundation and API v1**. Allotm
 - [x] Raw Upstox payload preservation through JSONB
 - [x] Day-end JSON/CSV/XLSX export
 - [x] Database query indexes
+- [x] Shared Upstox client (rate limiting + retry with backoff)
+- [x] Targeted retry of previously-failed IPOs
 
 ### API v1
 
 - [x] FastAPI application
 - [x] `GET /health`
 - [x] `GET /ready`
+- [x] `GET /health/upstox`
 - [x] `GET /api/v1/home`
 - [x] `GET /api/v1/ipos`
 - [x] `GET /api/v1/ipos/{ipo_id}`
@@ -174,6 +177,8 @@ backend/
 │   │       ├── health.py
 │   │       ├── home.py
 │   │       └── ipos.py
+│   ├── integrations/
+│   │   └── upstox.py
 │   ├── repositories/
 │   │   ├── home.py
 │   │   └── ipo.py
@@ -262,9 +267,15 @@ backend/
 - `hydrate_ipos.py`
   - Reads the four JSON files.
   - Collects unique IPO IDs.
-  - Calls `/ipos/:id`.
+  - Calls `/ipos/:id` (concurrent, 10 at a time, chunked commits of 20).
   - Normalizes the detailed response.
   - UPSERTs into PostgreSQL.
+  - Writes `hydration_failures.json` on failure.
+- `app/integrations/upstox.py`
+  - Shared Upstox client: base URL, auth headers, timeouts, retries, rate limiter.
+  - Sync (`with_retry`) and async (`with_retry_async`) retry helpers.
+  - Rate limiter (`REQUEST_RATE = 10/s`) paces requests so Upstox never sees a burst.
+  - `is_reachable()` used by `GET /health/upstox` for fast deploy-time token validation.
 - `sync.py`
   - Runs discovery first.
   - Runs hydration only after discovery succeeds.
@@ -430,12 +441,34 @@ The public API is served by FastAPI.
 ```text
 GET /health
 GET /ready
+GET /health/upstox
 
 GET /api/v1/home
 
 GET /api/v1/ipos
 GET /api/v1/ipos/{ipo_id}
 ```
+
+## Upstox rate limiting and retries
+
+All Upstox traffic is centralized in `app/integrations/upstox.py`, so discovery and hydration cannot drift apart.
+
+- Requests are **paced** (`REQUEST_RATE = 10/s`) so Upstox never sees a burst worth throttling.
+- Transient failures (`429`, `5xx`, transport errors) are **retried with exponential backoff** and jitter.
+- A `Retry-After` header, when present, is honored over the computed backoff.
+- Hydration uses an **async** retry path (`with_retry_async`) that awaits inside the retry loop; the sync path (`with_retry`) is used by discovery.
+- `GET /health/upstox` fails fast (5s, no retries) so a stale token is caught at deploy time.
+
+## Sync and retry
+
+```bash
+python sync.py              # discovery → hydration → PostgreSQL
+python sync.py --only open  # hydrate one lifecycle slice, no re-discovery
+python sync.py --retry-failed
+python hydrate_ipos.py --retry-failed
+```
+
+`--retry-failed` reads `hydration_failures.json` and retries only the IPOs that failed the previous run. The sidecar is **always rewritten** on a retry run, so previously-succeeded IDs don't linger in the file forever.
 
 ## Health
 
@@ -463,6 +496,21 @@ Example:
 {
   "status": "ready",
   "database": "ok"
+}
+```
+
+## Upstox reachability
+
+`GET /health/upstox`
+
+Checks that the Upstox API is reachable with the configured access token. A stale or missing token fails here instead of during a sync, so the failure is visible at deploy time.
+
+Example:
+
+```json
+{
+  "status": "ok",
+  "upstox": "ok"
 }
 ```
 
@@ -495,6 +543,8 @@ issue_type=regular|sme
 sort=newest|listing_date|bidding_start_date|bidding_end_date
 page=1
 limit=20
+from_date=YYYY-MM-DD
+to_date=YYYY-MM-DD
 ```
 
 Examples:
@@ -505,6 +555,7 @@ Examples:
 /api/v1/ipos?status=open&issue_type=sme
 /api/v1/ipos?page=1&limit=20
 /api/v1/ipos?status=listed&sort=listing_date
+/api/v1/ipos?from_date=2026-09-01&to_date=2026-09-30
 ```
 
 The response is paginated:
@@ -907,6 +958,8 @@ listed + sme
 
 It handles pagination and writes the four status files.
 
+Requests are paced at `REQUEST_RATE = 10/s` and transient failures are retried with exponential backoff and jitter.
+
 ## Hydration
 
 `hydrate_ipos.py` reads all four JSON files, creates a unique set of IPO IDs, then calls:
@@ -915,9 +968,18 @@ It handles pagination and writes the four status files.
 GET /v2/ipos/{id}
 ```
 
-The full response is normalized and inserted with PostgreSQL UPSERT semantics.
+Concurrency is bounded (10), commits are chunked (20). The full response is normalized and inserted with PostgreSQL UPSERT semantics.
 
 Repeated hydration does not create duplicate IPO rows.
+
+Failures are written to `hydration_failures.json`. Retry with:
+
+```bash
+python sync.py --retry-failed
+python hydrate_ipos.py --retry-failed
+```
+
+The sidecar is always rewritten on a retry run so previously-succeeded IDs don't linger.
 
 ## Persistence
 
@@ -1219,6 +1281,20 @@ Run full synchronization:
 
 ```bash
 python sync.py
+```
+
+Hydrate only a specific lifecycle status (no re-discovery):
+
+```bash
+python sync.py --only open
+python hydrate_ipos.py --only open
+```
+
+Retry only the IPOs that failed in the previous run:
+
+```bash
+python sync.py --retry-failed
+python hydrate_ipos.py --retry-failed
 ```
 
 Start API:

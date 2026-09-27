@@ -1,10 +1,16 @@
 import csv
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import xlsxwriter
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -39,6 +45,7 @@ CSV_FIELDS = [
 
 def load_category(path: Path) -> list[dict]:
     if not path.exists():
+        logging.error("Missing file: %s", path)
         raise FileNotFoundError(f"Missing file: {path}")
 
     with path.open("r", encoding="utf-8") as file:

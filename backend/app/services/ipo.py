@@ -1,3 +1,4 @@
+from datetime import date
 from math import ceil
 
 from sqlalchemy.orm import Session
@@ -76,6 +77,8 @@ def list_ipos(
     sort: str,
     page: int,
     limit: int,
+    from_date: date | None = None,
+    to_date: date | None = None,
 ):
     offset = (page - 1) * limit
 
@@ -86,6 +89,8 @@ def list_ipos(
         sort=sort,
         offset=offset,
         limit=limit,
+        from_date=from_date,
+        to_date=to_date,
     )
 
     pages = ceil(total / limit) if total else 0

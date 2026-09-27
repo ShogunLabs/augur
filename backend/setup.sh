@@ -14,9 +14,9 @@ echo "========================================"
 # --------------------------------------------------
 
 echo
-echo "[1/9] Checking system dependencies..."
+echo "[1/7] Checking system dependencies..."
 
-for cmd in python3 psql sudo; do
+for cmd in python3 psql pg_isready; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "ERROR: '$cmd' is not installed."
         exit 1
@@ -31,7 +31,7 @@ echo "System dependencies: OK"
 # --------------------------------------------------
 
 echo
-echo "[2/9] Setting up Python virtual environment..."
+echo "[2/7] Setting up Python virtual environment..."
 
 if [[ ! -d ".venv" ]]; then
     python3 -m venv .venv
@@ -46,28 +46,14 @@ python -m pip install --upgrade pip
 
 
 # --------------------------------------------------
-# 3. Create/install Python dependencies
+# 3. Install Python dependencies
 # --------------------------------------------------
 
 echo
-echo "[3/9] Installing Python dependencies..."
-
-if [[ ! -f "requirements.txt" ]]; then
-    cat > requirements.txt <<'EOF'
-alembic
-httpx
-python-dotenv
-SQLAlchemy
-psycopg[binary]
-XlsxWriter
-fastapi
-uvicorn[standard]
-EOF
-
-    echo "Created requirements.txt"
-fi
+echo "[3/7] Installing Python dependencies..."
 
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 echo "Python dependencies: OK"
 
@@ -77,7 +63,7 @@ echo "Python dependencies: OK"
 # --------------------------------------------------
 
 echo
-echo "[4/9] Checking environment configuration..."
+echo "[4/7] Checking environment configuration..."
 
 if [[ ! -f ".env" ]]; then
     echo "ERROR: .env not found."
@@ -118,7 +104,7 @@ echo "Environment configuration: OK"
 # --------------------------------------------------
 
 echo
-echo "[5/9] Checking PostgreSQL..."
+echo "[5/7] Checking PostgreSQL..."
 
 if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" >/dev/null 2>&1; then
     echo "PostgreSQL is not reachable at $DB_HOST:$DB_PORT"
@@ -141,7 +127,7 @@ echo "PostgreSQL: OK"
 # --------------------------------------------------
 
 echo
-echo "[6/9] Configuring PostgreSQL database..."
+echo "[6/7] Configuring PostgreSQL database..."
 
 sudo -u postgres psql \
     -v ON_ERROR_STOP=1 \
@@ -188,35 +174,12 @@ echo "PostgreSQL database: OK"
 # --------------------------------------------------
 
 echo
-echo "[7/9] Applying database migrations..."
+echo "[7/7] Applying database migrations..."
 
 alembic upgrade head
 
 echo "Database schema: OK"
 
-
-# --------------------------------------------------
-# 8. Fetch IPO index data
-# --------------------------------------------------
-
-echo
-echo "[8/9] Fetching IPO index data..."
-
-mkdir -p ipos
-
-python get_ipos.py
-
-echo "IPO index data: OK"
-
-
-# --------------------------------------------------
-# 9. Hydrate IPO details
-# --------------------------------------------------
-
-echo
-echo "[9/9] Hydrating IPO details into PostgreSQL..."
-
-python hydrate_ipos.py
 
 echo
 echo "========================================"
@@ -238,6 +201,7 @@ echo "  $(python --version)"
 echo
 echo "Run:"
 echo "  source .venv/bin/activate"
+
 echo
 echo "Start:"
 echo "  python sync.py"
