@@ -16,7 +16,7 @@ from typing import Awaitable, Callable, TypeVar
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv()
 
 logger = logging.getLogger("augur.upstox")
 

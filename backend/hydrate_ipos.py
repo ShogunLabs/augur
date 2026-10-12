@@ -56,10 +56,10 @@ def parse_decimal(value) -> Decimal | None:
     return Decimal(str(value))
 
 
-def load_ipo_ids() -> list[str]:
+def load_ipo_ids(only: str | None = None) -> list[str]:
     ids = set()
 
-    for filename in FILES:
+    for filename in ([f"{only}.json"] if only else FILES):
         path = IPO_DIR / filename
 
         if not path.exists():
@@ -231,7 +231,10 @@ async def _process_batch(
 
 
 async def main_async(only: str | None = None, retry_failed: bool = False) -> int:
-    global FILES
+    if only is not None and f"{only}.json" not in FILES:
+        raise ValueError(f"Unknown status {only!r}.")
+    if retry_failed and only is not None:
+        raise ValueError("--retry-failed cannot be combined with --only")
 
     if retry_failed:
         ipo_ids = load_failed_ids()
@@ -240,13 +243,7 @@ async def main_async(only: str | None = None, retry_failed: bool = False) -> int
             return 0
         logging.info("Retrying %s failed IPOs from %s", len(ipo_ids), FAILURE_LOG)
     else:
-        if only is not None and only not in FILES:
-            raise ValueError(f"Unknown status {only!r}. Expected one of: {', '.join(FILES)}")
-
-        if only is not None:
-            FILES = [only]
-
-        ipo_ids = load_ipo_ids()
+        ipo_ids = load_ipo_ids(only)
 
     logging.info("Found %s unique IPOs", len(ipo_ids))
 

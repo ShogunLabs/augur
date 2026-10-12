@@ -12,11 +12,11 @@ BASE_DIR = Path(__file__).resolve().parent
 STATUSES = ["upcoming", "open", "closed", "listed"]
 
 
-def run_script(script: str) -> None:
+def run_script(script: str, *args: str) -> None:
     logging.info("Running %s", script)
 
     result = subprocess.run(
-        [sys.executable, str(BASE_DIR / script)],
+        [sys.executable, str(BASE_DIR / script), *args],
         cwd=BASE_DIR,
     )
 
@@ -40,33 +40,20 @@ def main(only: str | None = None, retry_failed: bool = False) -> None:
     logging.info("AUGUR IPO SYNC")
 
     try:
-        if not retry_failed:
+        if not retry_failed and only is None:
             # Step 1: Fetch IPO index data
             run_script("get_ipos.py")
 
         # Step 2: Hydrate IPO details into PostgreSQL
         if retry_failed:
             logging.info("Retrying failed IPOs without re-discovering")
-            run_script("hydrate_ipos.py --retry-failed")
+            run_script("hydrate_ipos.py", "--retry-failed")
         elif only is None:
             run_script("hydrate_ipos.py")
         else:
             # Hydrate a single lifecycle slice without re-discovering.
             logging.info("Hydrating only status=%s", only)
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(BASE_DIR / "hydrate_ipos.py"),
-                    "--only",
-                    only,
-                ],
-                cwd=BASE_DIR,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"hydrate_ipos.py failed with exit code "
-                    f"{result.returncode}"
-                )
+            run_script("hydrate_ipos.py", "--only", only)
 
     except Exception as exc:
         logging.error("SYNC FAILED: %s", exc)

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
 
-Augur is an **IPO data backend**. All code lives under `backend/`. The repo root only holds `README.md` and this file. Work happens on the `development-branch`; `main` is the PR target.
+Augur is an **IPO data system** with a FastAPI/PostgreSQL backend under `backend/` and a Vite/React frontend under `frontend/`. Documentation lives in the root `README.md` and `docs/`. Work happens on the `development-branch`; `main` is the PR target.
 
 ## Commands (run from `backend/`)
 
@@ -20,7 +20,8 @@ source .venv/bin/activate
 - **Run a single test**: `pytest tests/test_ipos.py -q`
 - **Apply migrations**: `alembic upgrade head`
 - **Create a migration after model changes**: `alembic revision --autogenerate -m "describe change"`
-- **Docker**: `docker compose up -d`, then `docker compose exec backend python sync.py`, `docker compose exec backend alembic upgrade head`. DB is exposed on host port `5433` (service name `postgres` inside compose).
+- **Docker**: from `backend/`, configure `.env.docker`, then run `docker compose --env-file .env.docker up -d`, `docker compose --env-file .env.docker exec backend alembic upgrade head`, and `docker compose --env-file .env.docker exec backend python sync.py`. DB is exposed on host port `5433` (service name `postgres` inside compose).
+- **Frontend** (run from `frontend/`): `npm install`, `npm run dev`, `npm run build`. The Vite dev server proxies API requests to `http://127.0.0.1:8000`.
 
 ## Architecture (big picture)
 
